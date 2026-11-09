@@ -11,11 +11,11 @@ class DefaultFirebaseOptions {
 
     return switch (defaultTargetPlatform) {
       TargetPlatform.android => throw UnsupportedError(
-          'Android Firebase configuration is pending. Run flutterfire configure.',
-        ),
+        'Android Firebase configuration is pending. Run flutterfire configure.',
+      ),
       _ => throw UnsupportedError(
-          'Firebase is not configured for this platform.',
-        ),
+        'Firebase is not configured for this platform.',
+      ),
     };
   }
 

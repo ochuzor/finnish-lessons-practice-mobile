@@ -76,7 +76,9 @@ class _SignedOutScreenState extends State<SignedOutScreen> {
       if (mounted) setState(() => _errorMessage = _friendlyMessage(error));
     } catch (_) {
       if (mounted) {
-        setState(() => _errorMessage = 'Something went wrong. Please try again.');
+        setState(
+          () => _errorMessage = 'Something went wrong. Please try again.',
+        );
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -136,7 +138,9 @@ class _SignedOutScreenState extends State<SignedOutScreen> {
                           ),
                           validator: (value) {
                             final email = value?.trim() ?? '';
-                            if (email.isEmpty) return 'Enter your email address.';
+                            if (email.isEmpty) {
+                              return 'Enter your email address.';
+                            }
                             if (!_looksLikeEmail(email)) {
                               return 'Enter a valid email address.';
                             }
@@ -150,7 +154,8 @@ class _SignedOutScreenState extends State<SignedOutScreen> {
                           obscureText: _obscurePassword,
                           autofillHints: const [AutofillHints.password],
                           textInputAction: TextInputAction.done,
-                          onFieldSubmitted: (_) => _submit(createAccount: false),
+                          onFieldSubmitted: (_) =>
+                              _submit(createAccount: false),
                           decoration: InputDecoration(
                             labelText: 'Password',
                             prefixIcon: const Icon(Icons.lock_outline_rounded),
@@ -161,9 +166,9 @@ class _SignedOutScreenState extends State<SignedOutScreen> {
                               onPressed: _isLoading
                                   ? null
                                   : () => setState(
-                                        () => _obscurePassword =
-                                            !_obscurePassword,
-                                      ),
+                                      () =>
+                                          _obscurePassword = !_obscurePassword,
+                                    ),
                               icon: Icon(
                                 _obscurePassword
                                     ? Icons.visibility_outlined
@@ -201,7 +206,9 @@ class _SignedOutScreenState extends State<SignedOutScreen> {
                           child: _isLoading
                               ? const SizedBox.square(
                                   dimension: 20,
-                                  child: CircularProgressIndicator(strokeWidth: 2),
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
                                 )
                               : const Text('Sign in'),
                         ),
@@ -234,9 +241,12 @@ class _FeedbackMessage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    final foreground =
-        isError ? colors.onErrorContainer : colors.onTertiaryContainer;
-    final background = isError ? colors.errorContainer : colors.tertiaryContainer;
+    final foreground = isError
+        ? colors.onErrorContainer
+        : colors.onTertiaryContainer;
+    final background = isError
+        ? colors.errorContainer
+        : colors.tertiaryContainer;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -258,8 +268,9 @@ bool _looksLikeEmail(String value) {
 String _friendlyMessage(FirebaseAuthException error) {
   return switch (error.code) {
     'invalid-email' => 'Enter a valid email address.',
-    'invalid-credential' || 'wrong-password' || 'user-not-found' =>
-      'The email or password is incorrect.',
+    'invalid-credential' ||
+    'wrong-password' ||
+    'user-not-found' => 'The email or password is incorrect.',
     'email-already-in-use' => 'An account already uses this email address.',
     'weak-password' => 'Choose a stronger password with at least 6 characters.',
     'too-many-requests' => 'Too many attempts. Please wait and try again.',

@@ -21,8 +21,8 @@ class FirebaseAuthService implements AuthService {
 
   @override
   Stream<AppUser?> authStateChanges() => _auth.authStateChanges().map(
-        (user) => user == null ? null : AppUser(email: user.email),
-      );
+    (user) => user == null ? null : AppUser(email: user.email),
+  );
 
   @override
   Future<void> signIn({required String email, required String password}) async {

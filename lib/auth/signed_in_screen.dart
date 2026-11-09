@@ -4,11 +4,7 @@ import 'package:flutter/material.dart';
 import 'auth_service.dart';
 
 class SignedInScreen extends StatefulWidget {
-  const SignedInScreen({
-    required this.auth,
-    required this.email,
-    super.key,
-  });
+  const SignedInScreen({required this.auth, required this.email, super.key});
 
   final AuthService auth;
   final String? email;
@@ -32,7 +28,8 @@ class _SignedInScreenState extends State<SignedInScreen> {
     } on FirebaseAuthException catch (error) {
       if (mounted) {
         setState(() {
-          _errorMessage = error.message ?? 'Could not sign out. Please try again.';
+          _errorMessage =
+              error.message ?? 'Could not sign out. Please try again.';
         });
       }
     } catch (_) {
@@ -75,7 +72,10 @@ class _SignedInScreenState extends State<SignedInScreen> {
                         ),
                       ),
                       const SizedBox(height: 10),
-                      Text('You are signed in as', style: theme.textTheme.bodyLarge),
+                      Text(
+                        'You are signed in as',
+                        style: theme.textTheme.bodyLarge,
+                      ),
                       const SizedBox(height: 4),
                       Text(
                         email?.isNotEmpty == true ? email! : 'your account',
@@ -107,7 +107,9 @@ class _SignedInScreenState extends State<SignedInScreen> {
                         icon: _isLoading
                             ? const SizedBox.square(
                                 dimension: 18,
-                                child: CircularProgressIndicator(strokeWidth: 2),
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
                               )
                             : const Icon(Icons.logout_rounded),
                         label: const Text('Sign out'),
