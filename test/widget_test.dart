@@ -46,7 +46,9 @@ void main() {
     );
   });
 
-  testWidgets('signed-in screen shows email and signs out', (tester) async {
+  testWidgets('signed-in home shows recommendation, progress, and modules', (
+    tester,
+  ) async {
     final auth = FakeAuthService(
       initialUser: const AppUser(email: 'me@example.com'),
     );
@@ -58,15 +60,21 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Tervetuloa!'), findsOneWidget);
-    expect(find.text('me@example.com'), findsOneWidget);
-    expect(
-      find.text('Learning account connected as test-learner'),
-      findsOneWidget,
+    expect(find.text('Tervetuloa, test-learner!'), findsOneWidget);
+    expect(find.textContaining('me@example.com'), findsOneWidget);
+    expect(find.text('Vocabulary review'), findsOneWidget);
+    expect(find.text('2 words are ready to review.'), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.text('First Conversations'),
+      300,
+      scrollable: find.byType(Scrollable).last,
     );
-    expect(learnerApi.callCount, 1);
+    expect(find.text('First Conversations'), findsOneWidget);
+    expect(learnerApi.profileCallCount, 1);
+    expect(learnerApi.modulesCallCount, 1);
+    expect(learnerApi.recommendationCallCount, 1);
 
-    await tester.tap(find.text('Sign out'));
+    await tester.tap(find.byTooltip('Sign out'));
     await tester.pump();
 
     expect(auth.didSignOut, isTrue);
@@ -121,11 +129,48 @@ class FakeAuthService implements AuthService {
 }
 
 class FakeLearnerApi implements LearnerApi {
-  int callCount = 0;
+  int profileCallCount = 0;
+  int modulesCallCount = 0;
+  int recommendationCallCount = 0;
 
   @override
   Future<BackendUser> getCurrentUser() async {
-    callCount++;
+    profileCallCount++;
     return const BackendUser(id: 1, username: 'test-learner', isOwner: false);
+  }
+
+  @override
+  Future<List<CourseModule>> getModules() async {
+    modulesCallCount++;
+    return const [
+      CourseModule(
+        id: '01_first_conversations',
+        title: 'First Conversations',
+        fileName: '01_first_conversations.md',
+        moduleOrder: 1,
+        description: 'Start speaking Finnish.',
+      ),
+    ];
+  }
+
+  @override
+  Future<HomeRecommendation> getHomeRecommendation() async {
+    recommendationCallCount++;
+    return const HomeRecommendation(
+      dueCount: 2,
+      nextLesson: HomeLesson(
+        id: 'lesson-1',
+        moduleId: '01_first_conversations',
+        title: 'Greetings',
+      ),
+      courseComplete: false,
+      progress: CourseProgress(
+        totalModules: 8,
+        completedModules: 1,
+        lessonChecksPassed: 4,
+        practicingWords: 12,
+        masteredWords: 7,
+      ),
+    );
   }
 }

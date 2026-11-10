@@ -58,6 +58,38 @@ void main() {
     );
   });
 
+  test('modules and home recommendation match the mobile contract', () async {
+    final requestedPaths = <String>[];
+    final api = HttpLearnerApi(
+      baseUrl: 'https://finnish.ochuzor.com/',
+      idTokenProvider: () async => 'firebase-token',
+      client: MockClient((request) async {
+        requestedPaths.add(request.url.path);
+        if (request.url.path == '/api/modules') {
+          return http.Response(
+            '[{"id":"01_first_conversations","title":"First Conversations","file_name":"01.md","module_order":1,"description":"Start here."}]',
+            200,
+          );
+        }
+        return http.Response(
+          '{"due_count":3,"next_lesson":{"id":"lesson-1","module_id":"01_first_conversations","title":"Greetings"},"course_complete":false,"progress":{"total_modules":8,"completed_modules":1,"lesson_checks_passed":4,"practicing_words":12,"mastered_words":7}}',
+          200,
+        );
+      }),
+    );
+
+    final modules = await api.getModules();
+    final recommendation = await api.getHomeRecommendation();
+
+    expect(requestedPaths, ['/api/modules', '/api/home/recommendation']);
+    expect(modules.single.title, 'First Conversations');
+    expect(modules.single.moduleOrder, 1);
+    expect(recommendation.dueCount, 3);
+    expect(recommendation.nextLesson?.title, 'Greetings');
+    expect(recommendation.progress.completedModules, 1);
+    expect(recommendation.progress.masteredWords, 7);
+  });
+
   test('a missing Firebase token stops before the network request', () async {
     var requestWasSent = false;
     final api = HttpLearnerApi(
