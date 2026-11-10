@@ -292,11 +292,56 @@ class CourseLesson {
   final bool checkpointPassed;
 }
 
+class LessonWord {
+  const LessonWord({
+    required this.word,
+    required this.translations,
+    required this.score,
+    required this.sourceLessonId,
+    required this.isPersonal,
+  });
+
+  factory LessonWord.fromJson(Map<String, dynamic> json) {
+    final word = json['word'];
+    final translations = json['translations'];
+    final score = json['score'];
+    final sourceLessonId = json['source_lesson_id'];
+    final isPersonal = json['is_personal'];
+    if (word is! String ||
+        translations is! List<dynamic> ||
+        translations.any((translation) => translation is! String) ||
+        score is! int ||
+        score < 0 ||
+        score > 3 ||
+        (sourceLessonId != null && sourceLessonId is! String) ||
+        isPersonal is! bool) {
+      throw const FormatException(
+        'The server returned an invalid lesson word.',
+      );
+    }
+
+    return LessonWord(
+      word: word,
+      translations: translations.cast<String>().toList(growable: false),
+      score: score,
+      sourceLessonId: sourceLessonId as String?,
+      isPersonal: isPersonal,
+    );
+  }
+
+  final String word;
+  final List<String> translations;
+  final int score;
+  final String? sourceLessonId;
+  final bool isPersonal;
+}
+
 abstract interface class LearnerApi {
   Future<BackendUser> getCurrentUser();
   Future<List<CourseModule>> getModules();
   Future<HomeRecommendation> getHomeRecommendation();
   Future<List<CourseLesson>> getLessons();
+  Future<List<LessonWord>> getLessonWords(String lessonId);
 }
 
 class LearnerApiException implements Exception {
@@ -402,6 +447,32 @@ class HttpLearnerApi implements LearnerApi {
               );
             }
             return CourseLesson.fromJson(item);
+          })
+          .toList(growable: false);
+    } on FormatException catch (error) {
+      throw LearnerApiException(error.message);
+    }
+  }
+
+  @override
+  Future<List<LessonWord>> getLessonWords(String lessonId) async {
+    final encodedLessonId = Uri.encodeComponent(lessonId);
+    final response = await _get('/api/lessons/$encodedLessonId/words');
+    if (response is! List<dynamic>) {
+      throw const LearnerApiException(
+        'The server returned an invalid vocabulary list.',
+      );
+    }
+
+    try {
+      return response
+          .map((item) {
+            if (item is! Map<String, dynamic>) {
+              throw const FormatException(
+                'The server returned an invalid lesson word.',
+              );
+            }
+            return LessonWord.fromJson(item);
           })
           .toList(growable: false);
     } on FormatException catch (error) {

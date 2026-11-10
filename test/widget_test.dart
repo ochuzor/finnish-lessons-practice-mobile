@@ -91,6 +91,10 @@ void main() {
       find.text('Locked · pass the previous lesson check'),
       findsOneWidget,
     );
+    await tester.tap(find.text('Numbers'));
+    await tester.pumpAndSettle();
+    expect(find.text('Module 2'), findsOneWidget);
+    expect(learnerApi.lessonWordsCallCount, 0);
 
     await tester.tap(find.byTooltip('Back'));
     await tester.pumpAndSettle();
@@ -111,6 +115,31 @@ void main() {
       findsOneWidget,
     );
     expect(learnerApi.lessonsCallCount, 1);
+
+    await tester.tap(find.text('Greetings'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Learn the pattern'), findsOneWidget);
+    expect(find.text('Useful phrases'), findsOneWidget);
+    expect(find.text('Learn the vocabulary'), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.text('kauppa'),
+      300,
+      scrollable: find.byType(Scrollable).last,
+    );
+    expect(find.text('shop, store'), findsOneWidget);
+    expect(find.text('New'), findsOneWidget);
+    expect(learnerApi.lessonWordsCallCount, 1);
+    await tester.scrollUntilVisible(
+      find.text('Practice vocabulary'),
+      300,
+      scrollable: find.byType(Scrollable).last,
+    );
+    expect(find.text('Take lesson check'), findsOneWidget);
+    expect(find.text('Practice activities are coming next.'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Back'));
+    await tester.pumpAndSettle();
 
     await tester.tap(find.byTooltip('Back'));
     await tester.pumpAndSettle();
@@ -174,6 +203,7 @@ class FakeLearnerApi implements LearnerApi {
   int modulesCallCount = 0;
   int recommendationCallCount = 0;
   int lessonsCallCount = 0;
+  int lessonWordsCallCount = 0;
 
   @override
   Future<BackendUser> getCurrentUser() async {
@@ -239,7 +269,13 @@ class FakeLearnerApi implements LearnerApi {
         newWords: 2,
         practicingWords: 1,
         masteredWords: 1,
-        sections: [],
+        sections: [
+          LessonSection(
+            heading: 'Useful phrases',
+            content: '**Hei!**\n\n- Say hello\n- Introduce yourself',
+            sectionOrder: 1,
+          ),
+        ],
         locked: false,
         checkpointPassed: false,
       ),
@@ -274,6 +310,27 @@ class FakeLearnerApi implements LearnerApi {
         sections: [],
         locked: true,
         checkpointPassed: false,
+      ),
+    ];
+  }
+
+  @override
+  Future<List<LessonWord>> getLessonWords(String lessonId) async {
+    lessonWordsCallCount++;
+    return const [
+      LessonWord(
+        word: 'kauppa',
+        translations: ['shop', 'store'],
+        score: 0,
+        sourceLessonId: null,
+        isPersonal: false,
+      ),
+      LessonWord(
+        word: 'hei',
+        translations: ['hello'],
+        score: 3,
+        sourceLessonId: null,
+        isPersonal: false,
       ),
     ];
   }

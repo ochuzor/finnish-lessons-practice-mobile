@@ -127,4 +127,27 @@ void main() {
     );
     expect(requestWasSent, isFalse);
   });
+
+  test('lesson vocabulary preserves authored order and progress', () async {
+    late http.Request capturedRequest;
+    final api = HttpLearnerApi(
+      baseUrl: 'https://finnish.ochuzor.com',
+      idTokenProvider: () async => 'firebase-token',
+      client: MockClient((request) async {
+        capturedRequest = request;
+        return http.Response(
+          '[{"word":"kauppa","translations":["shop","store"],"score":0,"source_lesson_id":null,"is_personal":false},{"word":"leipä","translations":["bread"],"score":3,"source_lesson_id":null,"is_personal":false}]',
+          200,
+        );
+      }),
+    );
+
+    final words = await api.getLessonWords('lesson one');
+
+    expect(capturedRequest.url.path, '/api/lessons/lesson%20one/words');
+    expect(words.map((word) => word.word), ['kauppa', 'leipä']);
+    expect(words.first.translations, ['shop', 'store']);
+    expect(words.last.score, 3);
+    expect(words.last.isPersonal, isFalse);
+  });
 }

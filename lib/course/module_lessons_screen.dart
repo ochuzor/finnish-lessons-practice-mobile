@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../api/learner_api.dart';
+import 'lesson_screen.dart';
 
 class ModuleLessonsScreen extends StatefulWidget {
   const ModuleLessonsScreen({
@@ -118,6 +119,18 @@ class _ModuleLessonsScreenState extends State<ModuleLessonsScreen> {
                 child: _LessonCard(
                   lesson: visibleLessons[index],
                   displayNumber: index + 1,
+                  onOpen: visibleLessons[index].locked
+                      ? null
+                      : () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute<void>(
+                              builder: (_) => UnlockedLessonScreen(
+                                lesson: visibleLessons[index],
+                                learnerApi: widget.learnerApi,
+                              ),
+                            ),
+                          );
+                        },
                 ),
               ),
         ],
@@ -231,10 +244,15 @@ class _SummaryValue extends StatelessWidget {
 }
 
 class _LessonCard extends StatelessWidget {
-  const _LessonCard({required this.lesson, required this.displayNumber});
+  const _LessonCard({
+    required this.lesson,
+    required this.displayNumber,
+    required this.onOpen,
+  });
 
   final CourseLesson lesson;
   final int displayNumber;
+  final VoidCallback? onOpen;
 
   @override
   Widget build(BuildContext context) {
@@ -244,64 +262,75 @@ class _LessonCard extends StatelessWidget {
       color: lesson.locked
           ? theme.colorScheme.surfaceContainerHighest
           : theme.colorScheme.surface,
-      child: Padding(
-        padding: const EdgeInsets.all(18),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            CircleAvatar(
-              backgroundColor: state.background,
-              foregroundColor: state.foreground,
-              child: Icon(state.icon, size: 20),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Lesson $displayNumber',
-                    style: theme.textTheme.labelMedium?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                  const SizedBox(height: 3),
-                  Text(
-                    lesson.title,
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  if (lesson.description.isNotEmpty) ...[
-                    const SizedBox(height: 5),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onOpen,
+        child: Padding(
+          padding: const EdgeInsets.all(18),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              CircleAvatar(
+                backgroundColor: state.background,
+                foregroundColor: state.foreground,
+                child: Icon(state.icon, size: 20),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
                     Text(
-                      lesson.description,
-                      style: TextStyle(
+                      'Lesson $displayNumber',
+                      style: theme.textTheme.labelMedium?.copyWith(
                         color: theme.colorScheme.onSurfaceVariant,
                       ),
                     ),
-                  ],
-                  const SizedBox(height: 10),
-                  Text(
-                    state.label,
-                    style: theme.textTheme.labelLarge?.copyWith(
-                      color: state.foreground,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  if (lesson.totalWords > 0) ...[
-                    const SizedBox(height: 4),
+                    const SizedBox(height: 3),
                     Text(
-                      '${lesson.masteredWords} mastered · '
-                      '${lesson.practicingWords} practicing · '
-                      '${lesson.newWords} new',
-                      style: theme.textTheme.bodySmall,
+                      lesson.title,
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
+                    if (lesson.description.isNotEmpty) ...[
+                      const SizedBox(height: 5),
+                      Text(
+                        lesson.description,
+                        style: TextStyle(
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 10),
+                    Text(
+                      state.label,
+                      style: theme.textTheme.labelLarge?.copyWith(
+                        color: state.foreground,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    if (lesson.totalWords > 0) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        '${lesson.masteredWords} mastered · '
+                        '${lesson.practicingWords} practicing · '
+                        '${lesson.newWords} new',
+                        style: theme.textTheme.bodySmall,
+                      ),
+                    ],
                   ],
-                ],
+                ),
               ),
-            ),
-          ],
+              if (onOpen != null) ...[
+                const SizedBox(width: 8),
+                const Padding(
+                  padding: EdgeInsets.only(top: 10),
+                  child: Icon(Icons.chevron_right_rounded),
+                ),
+              ],
+            ],
+          ),
         ),
       ),
     );
