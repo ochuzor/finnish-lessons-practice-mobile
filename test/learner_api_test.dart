@@ -150,4 +150,48 @@ void main() {
     expect(words.last.score, 3);
     expect(words.last.isPersonal, isFalse);
   });
+
+  test(
+    'quiz batch and review use the authenticated practice contract',
+    () async {
+      final requests = <http.Request>[];
+      final api = HttpLearnerApi(
+        baseUrl: 'https://finnish.ochuzor.com',
+        idTokenProvider: () async => 'firebase-token',
+        client: MockClient((request) async {
+          requests.add(request);
+          if (request.method == 'GET') {
+            return http.Response(
+              '[{"word":"leipää","translations":["bread"],"score":2,"source_lesson_id":"lesson one","is_personal":false}]',
+              200,
+            );
+          }
+          return http.Response(
+            '{"word":"leipää","correct":true,"score":3,"score_increased":true,"last_increased_at":"2026-11-10T15:20:00+00:00","due_at":"2026-11-14T15:20:00+00:00"}',
+            200,
+          );
+        }),
+      );
+
+      final batch = await api.getLessonQuizBatch('lesson one');
+      final result = await api.reviewLessonWord(
+        lessonId: 'lesson one',
+        word: 'leipää',
+        correct: true,
+      );
+
+      expect(requests[0].url.path, '/api/lessons/lesson%20one/quiz-batch');
+      expect(
+        requests[1].url.path,
+        '/api/lessons/lesson%20one/words/leip%C3%A4%C3%A4/review',
+      );
+      expect(requests[1].headers['authorization'], 'Bearer firebase-token');
+      expect(requests[1].headers['content-type'], 'application/json');
+      expect(requests[1].body, '{"correct":true}');
+      expect(batch.single.score, 2);
+      expect(result.score, 3);
+      expect(result.scoreIncreased, isTrue);
+      expect(result.dueAt, DateTime.parse('2026-11-14T15:20:00+00:00'));
+    },
+  );
 }

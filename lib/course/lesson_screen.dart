@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../api/learner_api.dart';
+import 'vocabulary_practice_screen.dart';
 
 class UnlockedLessonScreen extends StatefulWidget {
   UnlockedLessonScreen({
@@ -17,6 +18,7 @@ class UnlockedLessonScreen extends StatefulWidget {
 }
 
 class _UnlockedLessonScreenState extends State<UnlockedLessonScreen> {
+  late CourseLesson _lesson;
   bool _isLoadingWords = true;
   String? _wordsError;
   List<LessonWord> _words = const [];
@@ -24,18 +26,38 @@ class _UnlockedLessonScreenState extends State<UnlockedLessonScreen> {
   @override
   void initState() {
     super.initState();
+    _lesson = widget.lesson;
     _loadWords();
   }
 
-  Future<void> _loadWords() async {
+  Future<void> _loadWords({bool refreshLesson = false}) async {
     setState(() {
       _isLoadingWords = true;
       _wordsError = null;
     });
 
     try {
-      final words = await widget.learnerApi.getLessonWords(widget.lesson.id);
-      if (mounted) setState(() => _words = words);
+      final wordsFuture = widget.learnerApi.getLessonWords(_lesson.id);
+      final lessonsFuture = refreshLesson
+          ? widget.learnerApi.getLessons()
+          : null;
+      final words = await wordsFuture;
+      CourseLesson? refreshedLesson;
+      if (lessonsFuture != null) {
+        final lessons = await lessonsFuture;
+        for (final lesson in lessons) {
+          if (lesson.id == _lesson.id) {
+            refreshedLesson = lesson;
+            break;
+          }
+        }
+      }
+      if (mounted) {
+        setState(() {
+          _words = words;
+          if (refreshedLesson != null) _lesson = refreshedLesson;
+        });
+      }
     } on LearnerApiException catch (error) {
       if (mounted) setState(() => _wordsError = error.detail);
     } catch (_) {
@@ -45,9 +67,24 @@ class _UnlockedLessonScreenState extends State<UnlockedLessonScreen> {
     }
   }
 
+  Future<void> _openPractice() async {
+    await Navigator.of(context).push<bool>(
+      MaterialPageRoute<bool>(
+        builder: (_) => VocabularyPracticeScreen(
+          lesson: _lesson,
+          lessonWords: _words,
+          learnerApi: widget.learnerApi,
+        ),
+      ),
+    );
+    if (mounted) {
+      await _loadWords(refreshLesson: true);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    final lesson = widget.lesson;
+    final lesson = _lesson;
     return Scaffold(
       appBar: AppBar(title: Text(lesson.title)),
       body: SafeArea(
@@ -79,7 +116,14 @@ class _UnlockedLessonScreenState extends State<UnlockedLessonScreen> {
             const SizedBox(height: 28),
             _StageHeading(number: 3, title: 'Practice and check'),
             const SizedBox(height: 12),
-            _PracticeActions(lesson: lesson, hasWords: _words.isNotEmpty),
+            _PracticeActions(
+              lesson: lesson,
+              hasWords: _words.isNotEmpty,
+              onPractice:
+                  !_isLoadingWords && _wordsError == null && _words.isNotEmpty
+                  ? _openPractice
+                  : null,
+            ),
           ],
         ),
       ),
@@ -477,10 +521,15 @@ class _WordState {
 }
 
 class _PracticeActions extends StatelessWidget {
-  const _PracticeActions({required this.lesson, required this.hasWords});
+  const _PracticeActions({
+    required this.lesson,
+    required this.hasWords,
+    required this.onPractice,
+  });
 
   final CourseLesson lesson;
   final bool hasWords;
+  final VoidCallback? onPractice;
 
   @override
   Widget build(BuildContext context) {
@@ -491,7 +540,7 @@ class _PracticeActions extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             FilledButton.icon(
-              onPressed: null,
+              onPressed: onPractice,
               icon: const Icon(Icons.school_outlined),
               label: const Text('Practice vocabulary'),
             ),
@@ -507,7 +556,7 @@ class _PracticeActions extends StatelessWidget {
             ),
             const SizedBox(height: 10),
             Text(
-              hasWords ? 'Practice activities are coming next.' : 'Vocabulary practice needs at least one lesson word. Lesson Check is coming next.',
+              hasWords ? 'Lesson Check is coming next.' : 'Vocabulary practice needs at least one lesson word. Lesson Check is coming next.',
               textAlign: TextAlign.center,
               style: TextStyle(
                 color: Theme.of(context).colorScheme.onSurfaceVariant,

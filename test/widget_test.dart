@@ -136,7 +136,37 @@ void main() {
       scrollable: find.byType(Scrollable).last,
     );
     expect(find.text('Take lesson check'), findsOneWidget);
-    expect(find.text('Practice activities are coming next.'), findsOneWidget);
+    expect(find.text('Lesson Check is coming next.'), findsOneWidget);
+
+    await tester.tap(find.text('Practice vocabulary'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Choose the English meaning'), findsOneWidget);
+    expect(find.text('1/2'), findsOneWidget);
+    expect(learnerApi.quizBatchCallCount, 1);
+    await tester.tap(find.text('shop, store'));
+    await tester.pumpAndSettle();
+    expect(find.text('Correct!'), findsOneWidget);
+    expect(find.text('Progressed to score 1'), findsOneWidget);
+    expect(learnerApi.reviewCallCount, 1);
+
+    await tester.tap(find.text('Next card'));
+    await tester.pumpAndSettle();
+    expect(find.text('Do you remember this word?'), findsOneWidget);
+    await tester.tap(find.text('Show answer'));
+    await tester.pump();
+    expect(find.text('hello'), findsOneWidget);
+    await tester.tap(find.text('Recalled it'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Session complete'), findsOneWidget);
+    expect(find.text('2 reviewed · 2 correct · 0 incorrect'), findsOneWidget);
+    expect(learnerApi.reviewCallCount, 2);
+    await tester.tap(find.text('Return to lesson'));
+    await tester.pumpAndSettle();
+    expect(find.text('Learn the vocabulary'), findsOneWidget);
+    expect(learnerApi.lessonsCallCount, 2);
+    expect(learnerApi.lessonWordsCallCount, 2);
 
     await tester.tap(find.byTooltip('Back'));
     await tester.pumpAndSettle();
@@ -204,6 +234,8 @@ class FakeLearnerApi implements LearnerApi {
   int recommendationCallCount = 0;
   int lessonsCallCount = 0;
   int lessonWordsCallCount = 0;
+  int quizBatchCallCount = 0;
+  int reviewCallCount = 0;
 
   @override
   Future<BackendUser> getCurrentUser() async {
@@ -333,5 +365,43 @@ class FakeLearnerApi implements LearnerApi {
         isPersonal: false,
       ),
     ];
+  }
+
+  @override
+  Future<List<LessonWord>> getLessonQuizBatch(String lessonId) async {
+    quizBatchCallCount++;
+    return const [
+      LessonWord(
+        word: 'kauppa',
+        translations: ['shop', 'store'],
+        score: 0,
+        sourceLessonId: 'lesson-1',
+        isPersonal: false,
+      ),
+      LessonWord(
+        word: 'hei',
+        translations: ['hello'],
+        score: 3,
+        sourceLessonId: 'lesson-1',
+        isPersonal: false,
+      ),
+    ];
+  }
+
+  @override
+  Future<WordReviewResult> reviewLessonWord({
+    required String lessonId,
+    required String word,
+    required bool correct,
+  }) async {
+    reviewCallCount++;
+    return WordReviewResult(
+      word: word,
+      correct: correct,
+      score: correct ? 1 : 0,
+      scoreIncreased: correct,
+      lastIncreasedAt: correct ? DateTime.utc(2026, 11, 10, 15, 20) : null,
+      dueAt: DateTime.utc(2026, 11, 10, 15, 30),
+    );
   }
 }

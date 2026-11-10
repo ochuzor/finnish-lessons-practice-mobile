@@ -336,12 +336,76 @@ class LessonWord {
   final bool isPersonal;
 }
 
+class WordReviewResult {
+  const WordReviewResult({
+    required this.word,
+    required this.correct,
+    required this.score,
+    required this.scoreIncreased,
+    required this.lastIncreasedAt,
+    required this.dueAt,
+  });
+
+  factory WordReviewResult.fromJson(Map<String, dynamic> json) {
+    final word = json['word'];
+    final correct = json['correct'];
+    final score = json['score'];
+    final scoreIncreased = json['score_increased'];
+    final lastIncreasedAt = json['last_increased_at'];
+    final dueAt = json['due_at'];
+    if (word is! String ||
+        correct is! bool ||
+        score is! int ||
+        score < 0 ||
+        score > 3 ||
+        scoreIncreased is! bool ||
+        (lastIncreasedAt != null && lastIncreasedAt is! String) ||
+        dueAt is! String) {
+      throw const FormatException(
+        'The server returned an invalid review result.',
+      );
+    }
+    final parsedLastIncreasedAt = lastIncreasedAt == null
+        ? null
+        : DateTime.tryParse(lastIncreasedAt);
+    final parsedDueAt = DateTime.tryParse(dueAt);
+    if ((lastIncreasedAt != null && parsedLastIncreasedAt == null) ||
+        parsedDueAt == null) {
+      throw const FormatException(
+        'The server returned an invalid review date.',
+      );
+    }
+
+    return WordReviewResult(
+      word: word,
+      correct: correct,
+      score: score,
+      scoreIncreased: scoreIncreased,
+      lastIncreasedAt: parsedLastIncreasedAt,
+      dueAt: parsedDueAt,
+    );
+  }
+
+  final String word;
+  final bool correct;
+  final int score;
+  final bool scoreIncreased;
+  final DateTime? lastIncreasedAt;
+  final DateTime dueAt;
+}
+
 abstract interface class LearnerApi {
   Future<BackendUser> getCurrentUser();
   Future<List<CourseModule>> getModules();
   Future<HomeRecommendation> getHomeRecommendation();
   Future<List<CourseLesson>> getLessons();
   Future<List<LessonWord>> getLessonWords(String lessonId);
+  Future<List<LessonWord>> getLessonQuizBatch(String lessonId);
+  Future<WordReviewResult> reviewLessonWord({
+    required String lessonId,
+    required String word,
+    required bool correct,
+  });
 }
 
 class LearnerApiException implements Exception {
@@ -480,6 +544,62 @@ class HttpLearnerApi implements LearnerApi {
     }
   }
 
+  @override
+  Future<List<LessonWord>> getLessonQuizBatch(String lessonId) async {
+    final encodedLessonId = Uri.encodeComponent(lessonId);
+    final response = await _get('/api/lessons/$encodedLessonId/quiz-batch');
+    return _parseLessonWords(response, invalidListMessage: 'quiz batch');
+  }
+
+  @override
+  Future<WordReviewResult> reviewLessonWord({
+    required String lessonId,
+    required String word,
+    required bool correct,
+  }) async {
+    final encodedLessonId = Uri.encodeComponent(lessonId);
+    final encodedWord = Uri.encodeComponent(word);
+    final response = await _post(
+      '/api/lessons/$encodedLessonId/words/$encodedWord/review',
+      {'correct': correct},
+    );
+    if (response is! Map<String, dynamic>) {
+      throw const LearnerApiException(
+        'The server returned an invalid review result.',
+      );
+    }
+    try {
+      return WordReviewResult.fromJson(response);
+    } on FormatException catch (error) {
+      throw LearnerApiException(error.message);
+    }
+  }
+
+  List<LessonWord> _parseLessonWords(
+    Object? response, {
+    required String invalidListMessage,
+  }) {
+    if (response is! List<dynamic>) {
+      throw LearnerApiException(
+        'The server returned an invalid $invalidListMessage.',
+      );
+    }
+    try {
+      return response
+          .map((item) {
+            if (item is! Map<String, dynamic>) {
+              throw const FormatException(
+                'The server returned an invalid lesson word.',
+              );
+            }
+            return LessonWord.fromJson(item);
+          })
+          .toList(growable: false);
+    } on FormatException catch (error) {
+      throw LearnerApiException(error.message);
+    }
+  }
+
   Future<Object?> _get(String path) async {
     if (_baseUrl.isEmpty) {
       throw const LearnerApiException(
@@ -520,6 +640,50 @@ class HttpLearnerApi implements LearnerApi {
       );
     }
 
+    return body;
+  }
+
+  Future<Object?> _post(String path, Map<String, dynamic> payload) async {
+    if (_baseUrl.isEmpty) {
+      throw const LearnerApiException(
+        'API_BASE_URL is missing. Start the app with the production API URL.',
+      );
+    }
+
+    final token = await idTokenProvider();
+    if (token == null || token.isEmpty) {
+      throw const LearnerApiException(
+        'Your sign-in session is unavailable. Sign out and sign in again.',
+      );
+    }
+
+    late http.Response response;
+    try {
+      response = await _client.post(
+        Uri.parse('$_baseUrl$path'),
+        headers: {
+          'Accept': 'application/json',
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode(payload),
+      );
+    } on Exception {
+      throw const LearnerApiException(
+        'Could not reach the Finnish Lessons server. Check your connection and try again.',
+      );
+    }
+
+    final body = _decodeJson(response.body);
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      final detail = body is Map<String, dynamic> ? body['detail'] : null;
+      throw LearnerApiException(
+        detail is String && detail.isNotEmpty
+            ? detail
+            : 'The server could not complete the request.',
+        statusCode: response.statusCode,
+      );
+    }
     return body;
   }
 
