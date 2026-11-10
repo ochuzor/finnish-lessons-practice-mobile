@@ -2,6 +2,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import '../api/learner_api.dart';
+import '../course/module_lessons_screen.dart';
 import 'auth_service.dart';
 
 class SignedInScreen extends StatefulWidget {
@@ -28,6 +29,7 @@ class _SignedInScreenState extends State<SignedInScreen> {
   BackendUser? _backendUser;
   HomeRecommendation? _recommendation;
   List<CourseModule> _modules = const [];
+  List<CourseLesson> _lessons = const [];
   String? _homeError;
   String? _signOutError;
 
@@ -48,12 +50,14 @@ class _SignedInScreenState extends State<SignedInScreen> {
         widget.learnerApi.getCurrentUser(),
         widget.learnerApi.getModules(),
         widget.learnerApi.getHomeRecommendation(),
+        widget.learnerApi.getLessons(),
       ]);
       if (!mounted) return;
       setState(() {
         _backendUser = results[0] as BackendUser;
         _modules = results[1] as List<CourseModule>;
         _recommendation = results[2] as HomeRecommendation;
+        _lessons = results[3] as List<CourseLesson>;
       });
     } on LearnerApiException catch (error) {
       if (mounted) setState(() => _homeError = error.detail);
@@ -160,7 +164,21 @@ class _SignedInScreenState extends State<SignedInScreen> {
           const SizedBox(height: 24),
           _ProgressSection(progress: recommendation.progress),
           const SizedBox(height: 28),
-          _ModulesSection(modules: _modules),
+          _ModulesSection(
+            modules: _modules,
+            lessons: _lessons,
+            onSelect: (module, lessons) {
+              Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => ModuleLessonsScreen(
+                    module: module,
+                    learnerApi: widget.learnerApi,
+                    initialLessons: lessons,
+                  ),
+                ),
+              );
+            },
+          ),
           if (_signOutError != null) ...[
             const SizedBox(height: 20),
             Text(
@@ -443,9 +461,15 @@ class _ProgressTile extends StatelessWidget {
 }
 
 class _ModulesSection extends StatelessWidget {
-  const _ModulesSection({required this.modules});
+  const _ModulesSection({
+    required this.modules,
+    required this.lessons,
+    required this.onSelect,
+  });
 
   final List<CourseModule> modules;
+  final List<CourseLesson> lessons;
+  final void Function(CourseModule module, List<CourseLesson> lessons) onSelect;
 
   @override
   Widget build(BuildContext context) {
@@ -461,7 +485,7 @@ class _ModulesSection extends StatelessWidget {
         ),
         const SizedBox(height: 6),
         Text(
-          'Lesson navigation will be added in the next slice.',
+          'Complete lesson checks to unlock the next module.',
           style: TextStyle(color: theme.colorScheme.onSurfaceVariant),
         ),
         const SizedBox(height: 12),
@@ -476,46 +500,119 @@ class _ModulesSection extends StatelessWidget {
           for (final module in modules)
             Padding(
               padding: const EdgeInsets.only(bottom: 12),
-              child: Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(18),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      CircleAvatar(
-                        backgroundColor: theme.colorScheme.secondaryContainer,
-                        foregroundColor: theme.colorScheme.onSecondaryContainer,
-                        child: Text('${module.moduleOrder}'),
-                      ),
-                      const SizedBox(width: 14),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              module.title,
-                              style: theme.textTheme.titleMedium?.copyWith(
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                            if (module.description.isNotEmpty) ...[
-                              const SizedBox(height: 5),
-                              Text(
-                                module.description,
-                                style: TextStyle(
-                                  color: theme.colorScheme.onSurfaceVariant,
-                                ),
-                              ),
-                            ],
-                          ],
-                        ),
-                      ),
-                    ],
+              child: _ModuleCard(
+                module: module,
+                lessons: lessons
+                    .where((lesson) => lesson.moduleId == module.id)
+                    .toList(growable: false)
+                  ..sort(
+                    (left, right) =>
+                        left.sectionOrder.compareTo(right.sectionOrder),
                   ),
-                ),
+                onSelect: onSelect,
               ),
             ),
       ],
+    );
+  }
+}
+
+class _ModuleCard extends StatelessWidget {
+  const _ModuleCard({
+    required this.module,
+    required this.lessons,
+    required this.onSelect,
+  });
+
+  final CourseModule module;
+  final List<CourseLesson> lessons;
+  final void Function(CourseModule module, List<CourseLesson> lessons) onSelect;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isEmpty = lessons.isEmpty;
+    final isLocked = !isEmpty && lessons.first.locked;
+    final isComplete =
+        !isEmpty && lessons.every((lesson) => lesson.checkpointPassed);
+    final completed = lessons.where((lesson) => lesson.checkpointPassed).length;
+    final canOpen = !isEmpty;
+
+    return Card(
+      color: isLocked || isEmpty
+          ? theme.colorScheme.surfaceContainerHighest
+          : theme.colorScheme.surface,
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: canOpen ? () => onSelect(module, lessons) : null,
+        child: Padding(
+          padding: const EdgeInsets.all(18),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              CircleAvatar(
+                backgroundColor: isLocked || isEmpty
+                    ? theme.colorScheme.surfaceContainerHigh
+                    : theme.colorScheme.secondaryContainer,
+                foregroundColor: isLocked || isEmpty
+                    ? theme.colorScheme.onSurfaceVariant
+                    : theme.colorScheme.onSecondaryContainer,
+                child: isLocked
+                    ? const Icon(Icons.lock_outline_rounded, size: 20)
+                    : isComplete
+                    ? const Icon(Icons.check_rounded, size: 20)
+                    : Text('${module.moduleOrder}'),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      module.title,
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    if (module.description.isNotEmpty) ...[
+                      const SizedBox(height: 5),
+                      Text(
+                        module.description,
+                        style: TextStyle(
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 8),
+                    Text(
+                      isEmpty
+                          ? 'No lessons available'
+                          : isLocked
+                          ? 'Locked · view locked lessons'
+                          : isComplete
+                          ? 'Module complete'
+                          : '$completed/${lessons.length} lesson checks passed',
+                      style: theme.textTheme.labelLarge?.copyWith(
+                        color: isLocked || isEmpty
+                            ? theme.colorScheme.onSurfaceVariant
+                            : theme.colorScheme.primary,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (canOpen) ...[
+                const SizedBox(width: 8),
+                const Padding(
+                  padding: EdgeInsets.only(top: 10),
+                  child: Icon(Icons.chevron_right_rounded),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

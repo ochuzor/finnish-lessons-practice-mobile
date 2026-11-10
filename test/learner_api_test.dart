@@ -71,6 +71,12 @@ void main() {
             200,
           );
         }
+        if (request.url.path == '/api/lessons') {
+          return http.Response(
+            '[{"id":"lesson-1","module_id":"01_first_conversations","title":"Greetings","file_name":"lesson-1.md","heading":"Greetings","section_order":1,"description":"Say hello.","total_words":4,"new_words":2,"practicing_words":1,"mastered_words":1,"sections":[{"heading":"Hello","content":"Hei!","section_order":1}],"locked":false,"checkpoint_passed":false}]',
+            200,
+          );
+        }
         return http.Response(
           '{"due_count":3,"next_lesson":{"id":"lesson-1","module_id":"01_first_conversations","title":"Greetings"},"course_complete":false,"progress":{"total_modules":8,"completed_modules":1,"lesson_checks_passed":4,"practicing_words":12,"mastered_words":7}}',
           200,
@@ -80,14 +86,22 @@ void main() {
 
     final modules = await api.getModules();
     final recommendation = await api.getHomeRecommendation();
+    final lessons = await api.getLessons();
 
-    expect(requestedPaths, ['/api/modules', '/api/home/recommendation']);
+    expect(requestedPaths, [
+      '/api/modules',
+      '/api/home/recommendation',
+      '/api/lessons',
+    ]);
     expect(modules.single.title, 'First Conversations');
     expect(modules.single.moduleOrder, 1);
     expect(recommendation.dueCount, 3);
     expect(recommendation.nextLesson?.title, 'Greetings');
     expect(recommendation.progress.completedModules, 1);
     expect(recommendation.progress.masteredWords, 7);
+    expect(lessons.single.title, 'Greetings');
+    expect(lessons.single.sections.single.content, 'Hei!');
+    expect(lessons.single.locked, isFalse);
   });
 
   test('a missing Firebase token stops before the network request', () async {

@@ -171,10 +171,132 @@ class HomeRecommendation {
   final CourseProgress progress;
 }
 
+class LessonSection {
+  const LessonSection({
+    required this.heading,
+    required this.content,
+    required this.sectionOrder,
+  });
+
+  factory LessonSection.fromJson(Map<String, dynamic> json) {
+    final heading = json['heading'];
+    final content = json['content'];
+    final sectionOrder = json['section_order'];
+    if (heading is! String || content is! String || sectionOrder is! int) {
+      throw const FormatException(
+        'The server returned an invalid lesson section.',
+      );
+    }
+    return LessonSection(
+      heading: heading,
+      content: content,
+      sectionOrder: sectionOrder,
+    );
+  }
+
+  final String heading;
+  final String content;
+  final int sectionOrder;
+}
+
+class CourseLesson {
+  const CourseLesson({
+    required this.id,
+    required this.moduleId,
+    required this.title,
+    required this.fileName,
+    required this.heading,
+    required this.sectionOrder,
+    required this.description,
+    required this.totalWords,
+    required this.newWords,
+    required this.practicingWords,
+    required this.masteredWords,
+    required this.sections,
+    required this.locked,
+    required this.checkpointPassed,
+  });
+
+  factory CourseLesson.fromJson(Map<String, dynamic> json) {
+    final id = json['id'];
+    final moduleId = json['module_id'];
+    final title = json['title'];
+    final fileName = json['file_name'];
+    final heading = json['heading'];
+    final sectionOrder = json['section_order'];
+    final description = json['description'];
+    final totalWords = json['total_words'];
+    final newWords = json['new_words'];
+    final practicingWords = json['practicing_words'];
+    final masteredWords = json['mastered_words'];
+    final sections = json['sections'];
+    final locked = json['locked'];
+    final checkpointPassed = json['checkpoint_passed'];
+    if (id is! String ||
+        (moduleId != null && moduleId is! String) ||
+        title is! String ||
+        fileName is! String ||
+        heading is! String ||
+        sectionOrder is! int ||
+        description is! String ||
+        totalWords is! int ||
+        newWords is! int ||
+        practicingWords is! int ||
+        masteredWords is! int ||
+        sections is! List<dynamic> ||
+        locked is! bool ||
+        checkpointPassed is! bool) {
+      throw const FormatException('The server returned an invalid lesson.');
+    }
+
+    return CourseLesson(
+      id: id,
+      moduleId: moduleId as String?,
+      title: title,
+      fileName: fileName,
+      heading: heading,
+      sectionOrder: sectionOrder,
+      description: description,
+      totalWords: totalWords,
+      newWords: newWords,
+      practicingWords: practicingWords,
+      masteredWords: masteredWords,
+      sections: sections
+          .map((section) {
+            if (section is! Map<String, dynamic>) {
+              throw const FormatException(
+                'The server returned an invalid lesson section.',
+              );
+            }
+            return LessonSection.fromJson(section);
+          })
+          .toList(growable: false),
+      locked: locked,
+      checkpointPassed: checkpointPassed,
+    );
+  }
+
+  final String id;
+  final String? moduleId;
+  final String title;
+  final String fileName;
+  final String heading;
+  final int sectionOrder;
+  final String description;
+  final int totalWords;
+  final int newWords;
+  final int practicingWords;
+  final int masteredWords;
+  final List<LessonSection> sections;
+  final bool locked;
+  final bool checkpointPassed;
+}
+
 abstract interface class LearnerApi {
   Future<BackendUser> getCurrentUser();
   Future<List<CourseModule>> getModules();
   Future<HomeRecommendation> getHomeRecommendation();
+  Future<List<CourseLesson>> getLessons();
 }
 
 class LearnerApiException implements Exception {
@@ -257,6 +379,31 @@ class HttpLearnerApi implements LearnerApi {
 
     try {
       return HomeRecommendation.fromJson(response);
+    } on FormatException catch (error) {
+      throw LearnerApiException(error.message);
+    }
+  }
+
+  @override
+  Future<List<CourseLesson>> getLessons() async {
+    final response = await _get('/api/lessons');
+    if (response is! List<dynamic>) {
+      throw const LearnerApiException(
+        'The server returned an invalid lesson list.',
+      );
+    }
+
+    try {
+      return response
+          .map((item) {
+            if (item is! Map<String, dynamic>) {
+              throw const FormatException(
+                'The server returned an invalid lesson.',
+              );
+            }
+            return CourseLesson.fromJson(item);
+          })
+          .toList(growable: false);
     } on FormatException catch (error) {
       throw LearnerApiException(error.message);
     }

@@ -73,6 +73,47 @@ void main() {
     expect(learnerApi.profileCallCount, 1);
     expect(learnerApi.modulesCallCount, 1);
     expect(learnerApi.recommendationCallCount, 1);
+    expect(learnerApi.lessonsCallCount, 1);
+
+    await tester.scrollUntilVisible(
+      find.text('Locked · view locked lessons'),
+      300,
+      scrollable: find.byType(Scrollable).last,
+    );
+    expect(find.text('Locked · view locked lessons'), findsOneWidget);
+    expect(find.byIcon(Icons.lock_outline_rounded), findsOneWidget);
+
+    await tester.tap(find.text('Everyday Essentials'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Numbers'), findsOneWidget);
+    expect(
+      find.text('Locked · pass the previous lesson check'),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.byTooltip('Back'));
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+      find.text('First Conversations'),
+      -300,
+      scrollable: find.byType(Scrollable).last,
+    );
+
+    await tester.tap(find.text('First Conversations'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Greetings'), findsOneWidget);
+    expect(find.text('Ready to learn'), findsOneWidget);
+    expect(find.text('Introducing yourself'), findsOneWidget);
+    expect(
+      find.text('Locked · pass the previous lesson check'),
+      findsOneWidget,
+    );
+    expect(learnerApi.lessonsCallCount, 1);
+
+    await tester.tap(find.byTooltip('Back'));
+    await tester.pumpAndSettle();
 
     await tester.tap(find.byTooltip('Sign out'));
     await tester.pump();
@@ -132,6 +173,7 @@ class FakeLearnerApi implements LearnerApi {
   int profileCallCount = 0;
   int modulesCallCount = 0;
   int recommendationCallCount = 0;
+  int lessonsCallCount = 0;
 
   @override
   Future<BackendUser> getCurrentUser() async {
@@ -149,6 +191,13 @@ class FakeLearnerApi implements LearnerApi {
         fileName: '01_first_conversations.md',
         moduleOrder: 1,
         description: 'Start speaking Finnish.',
+      ),
+      CourseModule(
+        id: '02_everyday_essentials',
+        title: 'Everyday Essentials',
+        fileName: '02_everyday_essentials.md',
+        moduleOrder: 2,
+        description: 'Useful everyday Finnish.',
       ),
     ];
   }
@@ -172,5 +221,60 @@ class FakeLearnerApi implements LearnerApi {
         masteredWords: 7,
       ),
     );
+  }
+
+  @override
+  Future<List<CourseLesson>> getLessons() async {
+    lessonsCallCount++;
+    return const [
+      CourseLesson(
+        id: 'lesson-1',
+        moduleId: '01_first_conversations',
+        title: 'Greetings',
+        fileName: 'lesson-1.md',
+        heading: 'Greetings',
+        sectionOrder: 1,
+        description: 'Say hello in Finnish.',
+        totalWords: 4,
+        newWords: 2,
+        practicingWords: 1,
+        masteredWords: 1,
+        sections: [],
+        locked: false,
+        checkpointPassed: false,
+      ),
+      CourseLesson(
+        id: 'lesson-2',
+        moduleId: '01_first_conversations',
+        title: 'Introducing yourself',
+        fileName: 'lesson-2.md',
+        heading: 'Introducing yourself',
+        sectionOrder: 2,
+        description: 'Share your name.',
+        totalWords: 3,
+        newWords: 3,
+        practicingWords: 0,
+        masteredWords: 0,
+        sections: [],
+        locked: true,
+        checkpointPassed: false,
+      ),
+      CourseLesson(
+        id: 'lesson-3',
+        moduleId: '02_everyday_essentials',
+        title: 'Numbers',
+        fileName: 'lesson-3.md',
+        heading: 'Numbers',
+        sectionOrder: 3,
+        description: 'Count in Finnish.',
+        totalWords: 5,
+        newWords: 5,
+        practicingWords: 0,
+        masteredWords: 0,
+        sections: [],
+        locked: true,
+        checkpointPassed: false,
+      ),
+    ];
   }
 }
