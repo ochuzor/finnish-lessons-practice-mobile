@@ -8,6 +8,7 @@ class AppUser {
 
 abstract interface class AuthService {
   Stream<AppUser?> authStateChanges();
+  Future<String?> getIdToken();
   Future<void> signIn({required String email, required String password});
   Future<void> createAccount({required String email, required String password});
   Future<void> sendPasswordResetEmail({required String email});
@@ -23,6 +24,13 @@ class FirebaseAuthService implements AuthService {
   Stream<AppUser?> authStateChanges() => _auth.authStateChanges().map(
     (user) => user == null ? null : AppUser(email: user.email),
   );
+
+  @override
+  Future<String?> getIdToken() async {
+    final user = _auth.currentUser;
+    if (user == null) return null;
+    return user.getIdToken();
+  }
 
   @override
   Future<void> signIn({required String email, required String password}) async {

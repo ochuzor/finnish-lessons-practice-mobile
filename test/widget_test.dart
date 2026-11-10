@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:finnishlessons/api/learner_api.dart';
 import 'package:finnishlessons/app.dart';
 import 'package:finnishlessons/auth/auth_service.dart';
 import 'package:flutter/material.dart';
@@ -12,7 +13,9 @@ void main() {
     final auth = FakeAuthService();
     addTearDown(auth.dispose);
 
-    await tester.pumpWidget(FinnishLessonsApp(auth: auth));
+    await tester.pumpWidget(
+      FinnishLessonsApp(auth: auth, learnerApi: FakeLearnerApi()),
+    );
     await tester.pump();
 
     expect(find.text('Finnish Lessons'), findsOneWidget);
@@ -49,11 +52,19 @@ void main() {
     );
     addTearDown(auth.dispose);
 
-    await tester.pumpWidget(FinnishLessonsApp(auth: auth));
-    await tester.pump();
+    final learnerApi = FakeLearnerApi();
+    await tester.pumpWidget(
+      FinnishLessonsApp(auth: auth, learnerApi: learnerApi),
+    );
+    await tester.pumpAndSettle();
 
     expect(find.text('Tervetuloa!'), findsOneWidget);
     expect(find.text('me@example.com'), findsOneWidget);
+    expect(
+      find.text('Learning account connected as test-learner'),
+      findsOneWidget,
+    );
+    expect(learnerApi.callCount, 1);
 
     await tester.tap(find.text('Sign out'));
     await tester.pump();
@@ -76,6 +87,9 @@ class FakeAuthService implements AuthService {
 
   @override
   Stream<AppUser?> authStateChanges() => _controller.stream;
+
+  @override
+  Future<String?> getIdToken() async => 'test-token';
 
   @override
   Future<void> createAccount({
@@ -104,4 +118,14 @@ class FakeAuthService implements AuthService {
   }
 
   Future<void> dispose() => _controller.close();
+}
+
+class FakeLearnerApi implements LearnerApi {
+  int callCount = 0;
+
+  @override
+  Future<BackendUser> getCurrentUser() async {
+    callCount++;
+    return const BackendUser(id: 1, username: 'test-learner', isOwner: false);
+  }
 }

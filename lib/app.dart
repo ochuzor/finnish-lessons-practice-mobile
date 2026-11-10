@@ -1,12 +1,20 @@
 import 'package:flutter/material.dart';
 
+import 'api/learner_api.dart';
 import 'auth/auth_gate.dart';
 import 'auth/auth_service.dart';
 
 class FinnishLessonsApp extends StatelessWidget {
-  const FinnishLessonsApp({required this.auth, super.key});
+  const FinnishLessonsApp({
+    required this.auth,
+    required this.learnerApi,
+    this.enableBackendProfile = true,
+    super.key,
+  });
 
   final AuthService auth;
+  final LearnerApi learnerApi;
+  final bool enableBackendProfile;
 
   @override
   Widget build(BuildContext context) {
@@ -42,7 +50,11 @@ class FinnishLessonsApp extends StatelessWidget {
           ),
         ),
       ),
-      home: AuthGate(auth: auth),
+      home: AuthGate(
+        auth: auth,
+        learnerApi: learnerApi,
+        enableBackendProfile: enableBackendProfile,
+      ),
     );
   }
 }
