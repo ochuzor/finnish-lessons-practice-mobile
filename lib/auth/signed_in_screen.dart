@@ -167,8 +167,8 @@ class _SignedInScreenState extends State<SignedInScreen> {
           _ModulesSection(
             modules: _modules,
             lessons: _lessons,
-            onSelect: (module, lessons) {
-              Navigator.of(context).push(
+            onSelect: (module, lessons) async {
+              await Navigator.of(context).push(
                 MaterialPageRoute<void>(
                   builder: (_) => ModuleLessonsScreen(
                     module: module,
@@ -177,6 +177,7 @@ class _SignedInScreenState extends State<SignedInScreen> {
                   ),
                 ),
               );
+              if (mounted) await _loadHome();
             },
           ),
           if (_signOutError != null) ...[
@@ -502,13 +503,14 @@ class _ModulesSection extends StatelessWidget {
               padding: const EdgeInsets.only(bottom: 12),
               child: _ModuleCard(
                 module: module,
-                lessons: lessons
-                    .where((lesson) => lesson.moduleId == module.id)
-                    .toList(growable: false)
-                  ..sort(
-                    (left, right) =>
-                        left.sectionOrder.compareTo(right.sectionOrder),
-                  ),
+                lessons:
+                    lessons
+                        .where((lesson) => lesson.moduleId == module.id)
+                        .toList(growable: false)
+                      ..sort(
+                        (left, right) =>
+                            left.sectionOrder.compareTo(right.sectionOrder),
+                      ),
                 onSelect: onSelect,
               ),
             ),

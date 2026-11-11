@@ -121,15 +121,19 @@ class _ModuleLessonsScreenState extends State<ModuleLessonsScreen> {
                   displayNumber: index + 1,
                   onOpen: visibleLessons[index].locked
                       ? null
-                      : () {
-                          Navigator.of(context).push(
-                            MaterialPageRoute<void>(
-                              builder: (_) => UnlockedLessonScreen(
-                                lesson: visibleLessons[index],
-                                learnerApi: widget.learnerApi,
-                              ),
-                            ),
-                          );
+                      : () async {
+                          final progressChanged = await Navigator.of(context)
+                              .push<bool>(
+                                MaterialPageRoute<bool>(
+                                  builder: (_) => UnlockedLessonScreen(
+                                    lesson: visibleLessons[index],
+                                    learnerApi: widget.learnerApi,
+                                  ),
+                                ),
+                              );
+                          if (progressChanged == true && mounted) {
+                            await _loadLessons();
+                          }
                         },
                 ),
               ),

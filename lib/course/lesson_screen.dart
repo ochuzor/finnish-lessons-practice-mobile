@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../api/learner_api.dart';
+import 'lesson_checkpoint_screen.dart';
 import 'vocabulary_practice_screen.dart';
 
 class UnlockedLessonScreen extends StatefulWidget {
@@ -82,6 +83,23 @@ class _UnlockedLessonScreenState extends State<UnlockedLessonScreen> {
     }
   }
 
+  Future<void> _openCheckpoint() async {
+    final passed = await Navigator.of(context).push<bool>(
+      MaterialPageRoute<bool>(
+        builder: (_) => LessonCheckpointScreen(
+          lesson: _lesson,
+          learnerApi: widget.learnerApi,
+        ),
+      ),
+    );
+    if (!mounted) return;
+    if (passed == true) {
+      Navigator.of(context).pop(true);
+      return;
+    }
+    await _loadWords(refreshLesson: true);
+  }
+
   @override
   Widget build(BuildContext context) {
     final lesson = _lesson;
@@ -123,6 +141,7 @@ class _UnlockedLessonScreenState extends State<UnlockedLessonScreen> {
                   !_isLoadingWords && _wordsError == null && _words.isNotEmpty
                   ? _openPractice
                   : null,
+              onCheckpoint: _openCheckpoint,
             ),
           ],
         ),
@@ -525,11 +544,13 @@ class _PracticeActions extends StatelessWidget {
     required this.lesson,
     required this.hasWords,
     required this.onPractice,
+    required this.onCheckpoint,
   });
 
   final CourseLesson lesson;
   final bool hasWords;
   final VoidCallback? onPractice;
+  final VoidCallback onCheckpoint;
 
   @override
   Widget build(BuildContext context) {
@@ -546,7 +567,7 @@ class _PracticeActions extends StatelessWidget {
             ),
             const SizedBox(height: 10),
             OutlinedButton.icon(
-              onPressed: null,
+              onPressed: onCheckpoint,
               icon: const Icon(Icons.fact_check_outlined),
               label: Text(
                 lesson.checkpointPassed
@@ -556,7 +577,7 @@ class _PracticeActions extends StatelessWidget {
             ),
             const SizedBox(height: 10),
             Text(
-              hasWords ? 'Lesson Check is coming next.' : 'Vocabulary practice needs at least one lesson word. Lesson Check is coming next.',
+              hasWords ? 'Pass the Lesson Check to unlock the next lesson.' : 'Vocabulary practice needs at least one lesson word. Lesson Check is available below.',
               textAlign: TextAlign.center,
               style: TextStyle(
                 color: Theme.of(context).colorScheme.onSurfaceVariant,

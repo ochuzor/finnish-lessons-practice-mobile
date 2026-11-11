@@ -194,4 +194,44 @@ void main() {
       expect(result.dueAt, DateTime.parse('2026-11-14T15:20:00+00:00'));
     },
   );
+
+  test('lesson check sends exact choices and parses server scoring', () async {
+    final requests = <http.Request>[];
+    final api = HttpLearnerApi(
+      baseUrl: 'https://finnish.ochuzor.com',
+      idTokenProvider: () async => 'firebase-token',
+      client: MockClient((request) async {
+        requests.add(request);
+        if (request.url.path.endsWith('/checkpoint/start')) {
+          return http.Response(
+            '{"session_id":"session-1","required_correct":2,"questions":[{"id":"1","prompt":"kauppa","options":["shop","bread"],"translation":""},{"id":"2","prompt":"Tarvitsen ___.","options":["leipää","pussi"],"translation":"I need bread."}]}',
+            200,
+          );
+        }
+        return http.Response(
+          '{"passed":true,"correct":2,"total":2,"required_correct":2,"missed":[],"unlocked_message":"Lesson unlocked: About You"}',
+          200,
+        );
+      }),
+    );
+
+    final session = await api.startCheckpoint('lesson one');
+    final result = await api.submitCheckpoint(
+      lessonId: 'lesson one',
+      sessionId: session.sessionId,
+      answers: const {'1': 'shop', '2': 'leipää'},
+    );
+
+    expect(requests[0].url.path, '/api/lessons/lesson%20one/checkpoint/start');
+    expect(requests[0].body, isEmpty);
+    expect(requests[1].url.path, '/api/lessons/lesson%20one/checkpoint/submit');
+    expect(
+      requests[1].body,
+      '{"session_id":"session-1","answers":{"1":"shop","2":"leipää"}}',
+    );
+    expect(session.questions.last.translation, 'I need bread.');
+    expect(session.requiredCorrect, 2);
+    expect(result.passed, isTrue);
+    expect(result.unlockedMessage, 'Lesson unlocked: About You');
+  });
 }

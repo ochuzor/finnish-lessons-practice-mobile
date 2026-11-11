@@ -394,6 +394,177 @@ class WordReviewResult {
   final DateTime dueAt;
 }
 
+class CheckpointQuestion {
+  const CheckpointQuestion({
+    required this.id,
+    required this.prompt,
+    required this.options,
+    required this.translation,
+  });
+
+  factory CheckpointQuestion.fromJson(Map<String, dynamic> json) {
+    final id = json['id'];
+    final prompt = json['prompt'];
+    final options = json['options'];
+    final translation = json['translation'];
+    if (id is! String ||
+        prompt is! String ||
+        options is! List<dynamic> ||
+        options.length < 2 ||
+        options.any((option) => option is! String) ||
+        translation is! String) {
+      throw const FormatException(
+        'The server returned an invalid lesson-check question.',
+      );
+    }
+    return CheckpointQuestion(
+      id: id,
+      prompt: prompt,
+      options: options.cast<String>().toList(growable: false),
+      translation: translation,
+    );
+  }
+
+  final String id;
+  final String prompt;
+  final List<String> options;
+  final String translation;
+}
+
+class CheckpointSession {
+  const CheckpointSession({
+    required this.sessionId,
+    required this.requiredCorrect,
+    required this.questions,
+  });
+
+  factory CheckpointSession.fromJson(Map<String, dynamic> json) {
+    final sessionId = json['session_id'];
+    final requiredCorrect = json['required_correct'];
+    final questions = json['questions'];
+    if (sessionId is! String ||
+        sessionId.isEmpty ||
+        requiredCorrect is! int ||
+        questions is! List<dynamic> ||
+        questions.isEmpty) {
+      throw const FormatException(
+        'The server returned an invalid lesson-check session.',
+      );
+    }
+    final parsedQuestions = questions
+        .map((question) {
+          if (question is! Map<String, dynamic>) {
+            throw const FormatException(
+              'The server returned an invalid lesson-check question.',
+            );
+          }
+          return CheckpointQuestion.fromJson(question);
+        })
+        .toList(growable: false);
+    if (requiredCorrect < 1 || requiredCorrect > parsedQuestions.length) {
+      throw const FormatException(
+        'The server returned an invalid lesson-check requirement.',
+      );
+    }
+    return CheckpointSession(
+      sessionId: sessionId,
+      requiredCorrect: requiredCorrect,
+      questions: parsedQuestions,
+    );
+  }
+
+  final String sessionId;
+  final int requiredCorrect;
+  final List<CheckpointQuestion> questions;
+}
+
+class MissedCheckpointAnswer {
+  const MissedCheckpointAnswer({
+    required this.prompt,
+    required this.selected,
+    required this.correct,
+  });
+
+  factory MissedCheckpointAnswer.fromJson(Map<String, dynamic> json) {
+    final prompt = json['prompt'];
+    final selected = json['selected'];
+    final correct = json['correct'];
+    if (prompt is! String || selected is! String || correct is! String) {
+      throw const FormatException(
+        'The server returned an invalid missed answer.',
+      );
+    }
+    return MissedCheckpointAnswer(
+      prompt: prompt,
+      selected: selected,
+      correct: correct,
+    );
+  }
+
+  final String prompt;
+  final String selected;
+  final String correct;
+}
+
+class CheckpointResult {
+  const CheckpointResult({
+    required this.passed,
+    required this.correct,
+    required this.total,
+    required this.requiredCorrect,
+    required this.missed,
+    required this.unlockedMessage,
+  });
+
+  factory CheckpointResult.fromJson(Map<String, dynamic> json) {
+    final passed = json['passed'];
+    final correct = json['correct'];
+    final total = json['total'];
+    final requiredCorrect = json['required_correct'];
+    final missed = json['missed'];
+    final unlockedMessage = json['unlocked_message'];
+    if (passed is! bool ||
+        correct is! int ||
+        total is! int ||
+        total < 1 ||
+        correct < 0 ||
+        correct > total ||
+        requiredCorrect is! int ||
+        requiredCorrect < 1 ||
+        requiredCorrect > total ||
+        missed is! List<dynamic> ||
+        (unlockedMessage != null && unlockedMessage is! String)) {
+      throw const FormatException(
+        'The server returned an invalid lesson-check result.',
+      );
+    }
+    return CheckpointResult(
+      passed: passed,
+      correct: correct,
+      total: total,
+      requiredCorrect: requiredCorrect,
+      missed: missed
+          .map((answer) {
+            if (answer is! Map<String, dynamic>) {
+              throw const FormatException(
+                'The server returned an invalid missed answer.',
+              );
+            }
+            return MissedCheckpointAnswer.fromJson(answer);
+          })
+          .toList(growable: false),
+      unlockedMessage: unlockedMessage as String?,
+    );
+  }
+
+  final bool passed;
+  final int correct;
+  final int total;
+  final int requiredCorrect;
+  final List<MissedCheckpointAnswer> missed;
+  final String? unlockedMessage;
+}
+
 abstract interface class LearnerApi {
   Future<BackendUser> getCurrentUser();
   Future<List<CourseModule>> getModules();
@@ -405,6 +576,12 @@ abstract interface class LearnerApi {
     required String lessonId,
     required String word,
     required bool correct,
+  });
+  Future<CheckpointSession> startCheckpoint(String lessonId);
+  Future<CheckpointResult> submitCheckpoint({
+    required String lessonId,
+    required String sessionId,
+    required Map<String, String> answers,
   });
 }
 
@@ -575,6 +752,48 @@ class HttpLearnerApi implements LearnerApi {
     }
   }
 
+  @override
+  Future<CheckpointSession> startCheckpoint(String lessonId) async {
+    final encodedLessonId = Uri.encodeComponent(lessonId);
+    final response = await _post(
+      '/api/lessons/$encodedLessonId/checkpoint/start',
+      null,
+    );
+    if (response is! Map<String, dynamic>) {
+      throw const LearnerApiException(
+        'The server returned an invalid lesson-check session.',
+      );
+    }
+    try {
+      return CheckpointSession.fromJson(response);
+    } on FormatException catch (error) {
+      throw LearnerApiException(error.message);
+    }
+  }
+
+  @override
+  Future<CheckpointResult> submitCheckpoint({
+    required String lessonId,
+    required String sessionId,
+    required Map<String, String> answers,
+  }) async {
+    final encodedLessonId = Uri.encodeComponent(lessonId);
+    final response = await _post(
+      '/api/lessons/$encodedLessonId/checkpoint/submit',
+      {'session_id': sessionId, 'answers': answers},
+    );
+    if (response is! Map<String, dynamic>) {
+      throw const LearnerApiException(
+        'The server returned an invalid lesson-check result.',
+      );
+    }
+    try {
+      return CheckpointResult.fromJson(response);
+    } on FormatException catch (error) {
+      throw LearnerApiException(error.message);
+    }
+  }
+
   List<LessonWord> _parseLessonWords(
     Object? response, {
     required String invalidListMessage,
@@ -643,7 +862,7 @@ class HttpLearnerApi implements LearnerApi {
     return body;
   }
 
-  Future<Object?> _post(String path, Map<String, dynamic> payload) async {
+  Future<Object?> _post(String path, Map<String, dynamic>? payload) async {
     if (_baseUrl.isEmpty) {
       throw const LearnerApiException(
         'API_BASE_URL is missing. Start the app with the production API URL.',
@@ -659,14 +878,15 @@ class HttpLearnerApi implements LearnerApi {
 
     late http.Response response;
     try {
+      final headers = <String, String>{
+        'Accept': 'application/json',
+        'Authorization': 'Bearer $token',
+      };
+      if (payload != null) headers['Content-Type'] = 'application/json';
       response = await _client.post(
         Uri.parse('$_baseUrl$path'),
-        headers: {
-          'Accept': 'application/json',
-          'Authorization': 'Bearer $token',
-          'Content-Type': 'application/json',
-        },
-        body: jsonEncode(payload),
+        headers: headers,
+        body: payload == null ? null : jsonEncode(payload),
       );
     } on Exception {
       throw const LearnerApiException(

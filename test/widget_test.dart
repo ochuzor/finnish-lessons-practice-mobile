@@ -114,7 +114,7 @@ void main() {
       find.text('Locked · pass the previous lesson check'),
       findsOneWidget,
     );
-    expect(learnerApi.lessonsCallCount, 1);
+    expect(learnerApi.lessonsCallCount, 2);
 
     await tester.tap(find.text('Greetings'));
     await tester.pumpAndSettle();
@@ -136,7 +136,10 @@ void main() {
       scrollable: find.byType(Scrollable).last,
     );
     expect(find.text('Take lesson check'), findsOneWidget);
-    expect(find.text('Lesson Check is coming next.'), findsOneWidget);
+    expect(
+      find.text('Pass the Lesson Check to unlock the next lesson.'),
+      findsOneWidget,
+    );
 
     await tester.tap(find.text('Practice vocabulary'));
     await tester.pumpAndSettle();
@@ -165,11 +168,53 @@ void main() {
     await tester.tap(find.text('Return to lesson'));
     await tester.pumpAndSettle();
     expect(find.text('Learn the vocabulary'), findsOneWidget);
-    expect(learnerApi.lessonsCallCount, 2);
+    expect(learnerApi.lessonsCallCount, 3);
     expect(learnerApi.lessonWordsCallCount, 2);
 
-    await tester.tap(find.byTooltip('Back'));
+    await tester.scrollUntilVisible(
+      find.text('Take lesson check'),
+      300,
+      scrollable: find.byType(Scrollable).last,
+    );
+    await tester.tap(find.text('Take lesson check'));
     await tester.pumpAndSettle();
+
+    expect(
+      find.textContaining('2 correct answers are required'),
+      findsOneWidget,
+    );
+    expect(find.text('Tarvitsen ___.'), findsOneWidget);
+    expect(learnerApi.checkpointStartCallCount, 1);
+    await tester.tap(find.text('shop / store'));
+    await tester.scrollUntilVisible(
+      find.text('leipää'),
+      250,
+      scrollable: find.byType(Scrollable).last,
+    );
+    await tester.drag(
+      find.byType(Scrollable).last,
+      const Offset(0, -120),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('leipää'));
+    await tester.pump();
+    await tester.scrollUntilVisible(
+      find.text('Submit lesson check'),
+      250,
+      scrollable: find.byType(Scrollable).last,
+    );
+    await tester.tap(find.text('Submit lesson check'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Lesson check passed!'), findsOneWidget);
+    expect(find.text('2/2 correct · 100%\n2 required to pass'), findsOneWidget);
+    expect(find.text('Lesson unlocked: Introducing yourself'), findsOneWidget);
+    expect(learnerApi.checkpointSubmitCallCount, 1);
+    await tester.tap(find.text('Continue to module'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Introducing yourself'), findsOneWidget);
+    expect(find.text('Ready to learn'), findsOneWidget);
 
     await tester.tap(find.byTooltip('Back'));
     await tester.pumpAndSettle();
@@ -236,6 +281,9 @@ class FakeLearnerApi implements LearnerApi {
   int lessonWordsCallCount = 0;
   int quizBatchCallCount = 0;
   int reviewCallCount = 0;
+  int checkpointStartCallCount = 0;
+  int checkpointSubmitCallCount = 0;
+  bool checkpointPassed = false;
 
   @override
   Future<BackendUser> getCurrentUser() async {
@@ -267,18 +315,18 @@ class FakeLearnerApi implements LearnerApi {
   @override
   Future<HomeRecommendation> getHomeRecommendation() async {
     recommendationCallCount++;
-    return const HomeRecommendation(
+    return HomeRecommendation(
       dueCount: 2,
       nextLesson: HomeLesson(
-        id: 'lesson-1',
+        id: checkpointPassed ? 'lesson-2' : 'lesson-1',
         moduleId: '01_first_conversations',
-        title: 'Greetings',
+        title: checkpointPassed ? 'Introducing yourself' : 'Greetings',
       ),
       courseComplete: false,
       progress: CourseProgress(
         totalModules: 8,
         completedModules: 1,
-        lessonChecksPassed: 4,
+        lessonChecksPassed: checkpointPassed ? 5 : 4,
         practicingWords: 12,
         masteredWords: 7,
       ),
@@ -288,7 +336,7 @@ class FakeLearnerApi implements LearnerApi {
   @override
   Future<List<CourseLesson>> getLessons() async {
     lessonsCallCount++;
-    return const [
+    return [
       CourseLesson(
         id: 'lesson-1',
         moduleId: '01_first_conversations',
@@ -309,7 +357,7 @@ class FakeLearnerApi implements LearnerApi {
           ),
         ],
         locked: false,
-        checkpointPassed: false,
+        checkpointPassed: checkpointPassed,
       ),
       CourseLesson(
         id: 'lesson-2',
@@ -324,7 +372,7 @@ class FakeLearnerApi implements LearnerApi {
         practicingWords: 0,
         masteredWords: 0,
         sections: [],
-        locked: true,
+        locked: !checkpointPassed,
         checkpointPassed: false,
       ),
       CourseLesson(
@@ -402,6 +450,47 @@ class FakeLearnerApi implements LearnerApi {
       scoreIncreased: correct,
       lastIncreasedAt: correct ? DateTime.utc(2026, 11, 10, 15, 20) : null,
       dueAt: DateTime.utc(2026, 11, 10, 15, 30),
+    );
+  }
+
+  @override
+  Future<CheckpointSession> startCheckpoint(String lessonId) async {
+    checkpointStartCallCount++;
+    return const CheckpointSession(
+      sessionId: 'checkpoint-session',
+      requiredCorrect: 2,
+      questions: [
+        CheckpointQuestion(
+          id: '1',
+          prompt: 'kauppa',
+          options: ['shop / store', 'bread'],
+          translation: '',
+        ),
+        CheckpointQuestion(
+          id: '2',
+          prompt: 'Tarvitsen ___.',
+          options: ['leipää', 'pussi'],
+          translation: 'I need bread.',
+        ),
+      ],
+    );
+  }
+
+  @override
+  Future<CheckpointResult> submitCheckpoint({
+    required String lessonId,
+    required String sessionId,
+    required Map<String, String> answers,
+  }) async {
+    checkpointSubmitCallCount++;
+    checkpointPassed = true;
+    return const CheckpointResult(
+      passed: true,
+      correct: 2,
+      total: 2,
+      requiredCorrect: 2,
+      missed: [],
+      unlockedMessage: 'Lesson unlocked: Introducing yourself',
     );
   }
 }
