@@ -195,6 +195,40 @@ void main() {
     },
   );
 
+  test(
+    'lesson exercises preserve authored context and server options',
+    () async {
+      late http.Request capturedRequest;
+      final api = HttpLearnerApi(
+        baseUrl: 'https://finnish.ochuzor.com',
+        idTokenProvider: () async => 'firebase-token',
+        client: MockClient((request) async {
+          capturedRequest = request;
+          return http.Response(
+            '[{"id":"lesson_one_exercise_1","exercise_type":"fill_in_blank","prompt":"Tarvitsen ___.","answer":"leipää","options":["leipää","kaupassa","pussi","ostan"],"translation":"I need bread.","exercise_order":1}]',
+            200,
+          );
+        }),
+      );
+
+      final exercises = await api.getLessonExercises('lesson one');
+
+      expect(capturedRequest.url.path, '/api/lessons/lesson%20one/exercises');
+      expect(capturedRequest.headers['authorization'], 'Bearer firebase-token');
+      expect(exercises.single.exerciseType, 'fill_in_blank');
+      expect(exercises.single.prompt, 'Tarvitsen ___.');
+      expect(exercises.single.answer, 'leipää');
+      expect(exercises.single.options, [
+        'leipää',
+        'kaupassa',
+        'pussi',
+        'ostan',
+      ]);
+      expect(exercises.single.translation, 'I need bread.');
+      expect(exercises.single.exerciseOrder, 1);
+    },
+  );
+
   test('lesson check sends exact choices and parses server scoring', () async {
     final requests = <http.Request>[];
     final api = HttpLearnerApi(

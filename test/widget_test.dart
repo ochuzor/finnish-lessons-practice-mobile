@@ -153,10 +153,13 @@ void main() {
     await tester.tap(find.text('Practice vocabulary'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Choose the English meaning'), findsOneWidget);
+    expect(find.text('Choose the missing Finnish word'), findsOneWidget);
+    expect(find.text('Olen ___.'), findsOneWidget);
+    expect(find.text('I am in the shop.'), findsOneWidget);
     expect(find.text('1/2'), findsOneWidget);
     expect(learnerApi.quizBatchCallCount, 1);
-    await tester.tap(find.text('shop, store'));
+    expect(learnerApi.lessonExercisesCallCount, 1);
+    await tester.tap(find.text('kauppa'));
     await tester.pumpAndSettle();
     expect(find.text('Correct!'), findsOneWidget);
     expect(find.text('Progressed to score 1'), findsOneWidget);
@@ -286,6 +289,7 @@ class FakeLearnerApi implements LearnerApi {
   int lessonsCallCount = 0;
   int lessonWordsCallCount = 0;
   int quizBatchCallCount = 0;
+  int lessonExercisesCallCount = 0;
   int reviewCallCount = 0;
   int checkpointStartCallCount = 0;
   int checkpointSubmitCallCount = 0;
@@ -438,6 +442,22 @@ class FakeLearnerApi implements LearnerApi {
         score: 3,
         sourceLessonId: 'lesson-1',
         isPersonal: false,
+      ),
+    ];
+  }
+
+  @override
+  Future<List<LessonExercise>> getLessonExercises(String lessonId) async {
+    lessonExercisesCallCount++;
+    return const [
+      LessonExercise(
+        id: 'lesson-1-exercise-1',
+        exerciseType: 'fill_in_blank',
+        prompt: 'Olen ___.',
+        answer: 'kauppa',
+        options: ['kauppa', 'leipä'],
+        translation: 'I am in the shop.',
+        exerciseOrder: 1,
       ),
     ];
   }

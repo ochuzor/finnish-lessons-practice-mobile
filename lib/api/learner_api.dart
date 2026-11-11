@@ -336,6 +336,59 @@ class LessonWord {
   final bool isPersonal;
 }
 
+class LessonExercise {
+  const LessonExercise({
+    required this.id,
+    required this.exerciseType,
+    required this.prompt,
+    required this.answer,
+    required this.options,
+    required this.translation,
+    required this.exerciseOrder,
+  });
+
+  factory LessonExercise.fromJson(Map<String, dynamic> json) {
+    final id = json['id'];
+    final exerciseType = json['exercise_type'];
+    final prompt = json['prompt'];
+    final answer = json['answer'];
+    final options = json['options'];
+    final translation = json['translation'];
+    final exerciseOrder = json['exercise_order'];
+    if (id is! String ||
+        exerciseType is! String ||
+        prompt is! String ||
+        answer is! String ||
+        options is! List<dynamic> ||
+        options.isEmpty ||
+        options.any((option) => option is! String) ||
+        !options.contains(answer) ||
+        translation is! String ||
+        exerciseOrder is! int) {
+      throw const FormatException(
+        'The server returned an invalid lesson exercise.',
+      );
+    }
+    return LessonExercise(
+      id: id,
+      exerciseType: exerciseType,
+      prompt: prompt,
+      answer: answer,
+      options: options.cast<String>().toList(growable: false),
+      translation: translation,
+      exerciseOrder: exerciseOrder,
+    );
+  }
+
+  final String id;
+  final String exerciseType;
+  final String prompt;
+  final String answer;
+  final List<String> options;
+  final String translation;
+  final int exerciseOrder;
+}
+
 class WordReviewResult {
   const WordReviewResult({
     required this.word,
@@ -572,6 +625,7 @@ abstract interface class LearnerApi {
   Future<List<CourseLesson>> getLessons();
   Future<List<LessonWord>> getLessonWords(String lessonId);
   Future<List<LessonWord>> getLessonQuizBatch(String lessonId);
+  Future<List<LessonExercise>> getLessonExercises(String lessonId);
   Future<WordReviewResult> reviewLessonWord({
     required String lessonId,
     required String word,
@@ -726,6 +780,31 @@ class HttpLearnerApi implements LearnerApi {
     final encodedLessonId = Uri.encodeComponent(lessonId);
     final response = await _get('/api/lessons/$encodedLessonId/quiz-batch');
     return _parseLessonWords(response, invalidListMessage: 'quiz batch');
+  }
+
+  @override
+  Future<List<LessonExercise>> getLessonExercises(String lessonId) async {
+    final encodedLessonId = Uri.encodeComponent(lessonId);
+    final response = await _get('/api/lessons/$encodedLessonId/exercises');
+    if (response is! List<dynamic>) {
+      throw const LearnerApiException(
+        'The server returned an invalid exercise list.',
+      );
+    }
+    try {
+      return response
+          .map((item) {
+            if (item is! Map<String, dynamic>) {
+              throw const FormatException(
+                'The server returned an invalid lesson exercise.',
+              );
+            }
+            return LessonExercise.fromJson(item);
+          })
+          .toList(growable: false);
+    } on FormatException catch (error) {
+      throw LearnerApiException(error.message);
+    }
   }
 
   @override

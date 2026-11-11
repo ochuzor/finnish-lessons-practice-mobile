@@ -25,6 +25,7 @@ class _VocabularyPracticeScreenState extends State<VocabularyPracticeScreen> {
   bool _isLoading = true;
   String? _loadError;
   List<LessonWord> _cards = const [];
+  Map<String, LessonExercise> _exercisesByAnswer = const {};
   int _index = 0;
   int _correctCount = 0;
   int _incorrectCount = 0;
@@ -44,16 +45,34 @@ class _VocabularyPracticeScreenState extends State<VocabularyPracticeScreen> {
       _isLoading = true;
       _loadError = null;
       _cards = const [];
+      _exercisesByAnswer = const {};
       _index = 0;
       _correctCount = 0;
       _incorrectCount = 0;
       _resetCardState();
     });
     try {
-      final cards = await widget.learnerApi.getLessonQuizBatch(
-        widget.lesson.id,
-      );
-      if (mounted) setState(() => _cards = cards);
+      final results = await Future.wait<Object>([
+        widget.learnerApi.getLessonQuizBatch(widget.lesson.id),
+        widget.learnerApi.getLessonExercises(widget.lesson.id),
+      ]);
+      final cards = results[0] as List<LessonWord>;
+      final exercises =
+          List<LessonExercise>.of(results[1] as List<LessonExercise>)..sort(
+            (left, right) => left.exerciseOrder.compareTo(right.exerciseOrder),
+          );
+      final exercisesByAnswer = <String, LessonExercise>{};
+      for (final exercise in exercises) {
+        if (exercise.exerciseType == 'fill_in_blank') {
+          exercisesByAnswer.putIfAbsent(exercise.answer, () => exercise);
+        }
+      }
+      if (mounted) {
+        setState(() {
+          _cards = cards;
+          _exercisesByAnswer = exercisesByAnswer;
+        });
+      }
     } on LearnerApiException catch (error) {
       if (mounted) setState(() => _loadError = error.detail);
     } catch (_) {
@@ -126,7 +145,11 @@ class _VocabularyPracticeScreenState extends State<VocabularyPracticeScreen> {
   }
 
   bool _isSelfAssessment(LessonWord card) =>
-      card.score == 3 || card.translations.isEmpty;
+      card.score == 3 ||
+      (card.translations.isEmpty && _exerciseFor(card) == null);
+
+  LessonExercise? _exerciseFor(LessonWord card) =>
+      card.score < 3 ? _exercisesByAnswer[card.word] : null;
 
   @override
   Widget build(BuildContext context) {
@@ -165,6 +188,7 @@ class _VocabularyPracticeScreenState extends State<VocabularyPracticeScreen> {
   Widget _buildCard(LessonWord card) {
     final theme = Theme.of(context);
     final isSelfAssessment = _isSelfAssessment(card);
+    final exercise = _exerciseFor(card);
     return ListView(
       padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
       children: [
@@ -191,23 +215,33 @@ class _VocabularyPracticeScreenState extends State<VocabularyPracticeScreen> {
                 Text(
                   isSelfAssessment
                       ? 'Do you remember this word?'
+                      : exercise != null
+                      ? 'Choose the missing Finnish word'
                       : 'Choose the English meaning',
                   textAlign: TextAlign.center,
                   style: theme.textTheme.titleMedium,
                 ),
                 const SizedBox(height: 14),
                 Text(
-                  card.word,
+                  exercise?.prompt ?? card.word,
                   textAlign: TextAlign.center,
                   style: theme.textTheme.headlineMedium?.copyWith(
                     fontWeight: FontWeight.w700,
                   ),
                 ),
+                if (exercise != null && exercise.translation.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    exercise.translation,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: theme.colorScheme.onSurfaceVariant),
+                  ),
+                ],
                 const SizedBox(height: 22),
                 if (isSelfAssessment)
                   _buildSelfAssessment(card)
                 else
-                  _buildChoices(card),
+                  _buildChoices(card, exercise: exercise),
                 if (_isSubmitting) ...[
                   const SizedBox(height: 18),
                   const Center(child: CircularProgressIndicator()),
@@ -236,7 +270,7 @@ class _VocabularyPracticeScreenState extends State<VocabularyPracticeScreen> {
                   _ReviewFeedback(
                     result: _result!,
                     card: card,
-                    correctAnswer: _translationLabel(card),
+                    correctAnswer: exercise?.answer ?? _translationLabel(card),
                   ),
                   const SizedBox(height: 14),
                   FilledButton(
@@ -256,8 +290,9 @@ class _VocabularyPracticeScreenState extends State<VocabularyPracticeScreen> {
     );
   }
 
-  Widget _buildChoices(LessonWord card) {
-    final choices = _choicesFor(card);
+  Widget _buildChoices(LessonWord card, {LessonExercise? exercise}) {
+    final correctAnswer = exercise?.answer ?? _translationLabel(card);
+    final choices = exercise?.options ?? _choicesFor(card);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -266,7 +301,7 @@ class _VocabularyPracticeScreenState extends State<VocabularyPracticeScreen> {
             padding: const EdgeInsets.only(bottom: 10),
             child: OutlinedButton(
               onPressed: _result == null && !_isSubmitting && !_submissionFailed
-                  ? () => _submit(choice == _translationLabel(card))
+                  ? () => _submit(choice == correctAnswer)
                   : null,
               style: OutlinedButton.styleFrom(
                 padding: const EdgeInsets.symmetric(
