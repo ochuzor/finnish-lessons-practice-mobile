@@ -62,7 +62,7 @@ void main() {
 
     expect(find.text('Tervetuloa, test-learner!'), findsOneWidget);
     expect(find.textContaining('me@example.com'), findsOneWidget);
-    expect(find.text('Vocabulary review'), findsOneWidget);
+    expect(find.text('Review vocabulary'), findsOneWidget);
     expect(find.text('2 words are ready to review.'), findsOneWidget);
     final modulesTile = tester.getTopLeft(find.text('Modules complete'));
     final checksTile = tester.getTopLeft(find.text('Lesson checks passed'));
@@ -233,6 +233,58 @@ void main() {
 
     expect(auth.didSignOut, isTrue);
   });
+
+  testWidgets('home recommendation runs global vocabulary review', (
+    tester,
+  ) async {
+    final auth = FakeAuthService(
+      initialUser: const AppUser(email: 'me@example.com'),
+    );
+    addTearDown(auth.dispose);
+    final learnerApi = FakeLearnerApi();
+
+    await tester.pumpWidget(
+      FinnishLessonsApp(auth: auth, learnerApi: learnerApi),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Review vocabulary'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Review your vocabulary'), findsOneWidget);
+    expect(learnerApi.practiceBatchCallCount, 0);
+    await tester.tap(find.text('Start quiz'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Choose the English meaning'), findsOneWidget);
+    expect(find.text('kauppa'), findsOneWidget);
+    expect(learnerApi.practiceBatchCallCount, 1);
+    expect(learnerApi.practiceWordsCallCount, 1);
+    await tester.tap(find.text('shop / store'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Correct!'), findsOneWidget);
+    expect(learnerApi.reviewCallCount, 1);
+    await tester.tap(find.text('Next card'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Do you remember this word?'), findsOneWidget);
+    expect(find.text('hei'), findsOneWidget);
+    await tester.tap(find.text('Show answer'));
+    await tester.pump();
+    expect(find.text('hello'), findsOneWidget);
+    await tester.tap(find.text('Recalled it'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Session complete'), findsOneWidget);
+    expect(find.text('2 reviewed · 2 correct · 0 incorrect'), findsOneWidget);
+    expect(learnerApi.personalReviewCallCount, 1);
+    await tester.tap(find.text('Return home'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Review vocabulary'), findsOneWidget);
+    expect(learnerApi.recommendationCallCount, 2);
+  });
 }
 
 class FakeAuthService implements AuthService {
@@ -290,7 +342,10 @@ class FakeLearnerApi implements LearnerApi {
   int lessonWordsCallCount = 0;
   int quizBatchCallCount = 0;
   int lessonExercisesCallCount = 0;
+  int practiceBatchCallCount = 0;
+  int practiceWordsCallCount = 0;
   int reviewCallCount = 0;
+  int personalReviewCallCount = 0;
   int checkpointStartCallCount = 0;
   int checkpointSubmitCallCount = 0;
   bool checkpointPassed = false;
@@ -463,6 +518,55 @@ class FakeLearnerApi implements LearnerApi {
   }
 
   @override
+  Future<List<LessonWord>> getPracticeQuizBatch() async {
+    practiceBatchCallCount++;
+    return const [
+      LessonWord(
+        word: 'kauppa',
+        translations: ['shop', 'store'],
+        score: 0,
+        sourceLessonId: 'lesson-1',
+        isPersonal: false,
+      ),
+      LessonWord(
+        word: 'hei',
+        translations: ['hello'],
+        score: 3,
+        sourceLessonId: null,
+        isPersonal: true,
+      ),
+    ];
+  }
+
+  @override
+  Future<List<LessonWord>> getPracticeWords() async {
+    practiceWordsCallCount++;
+    return const [
+      LessonWord(
+        word: 'kauppa',
+        translations: ['shop', 'store'],
+        score: 0,
+        sourceLessonId: 'lesson-1',
+        isPersonal: false,
+      ),
+      LessonWord(
+        word: 'hei',
+        translations: ['hello'],
+        score: 3,
+        sourceLessonId: null,
+        isPersonal: true,
+      ),
+      LessonWord(
+        word: 'leipä',
+        translations: ['bread'],
+        score: 2,
+        sourceLessonId: 'lesson-1',
+        isPersonal: false,
+      ),
+    ];
+  }
+
+  @override
   Future<WordReviewResult> reviewLessonWord({
     required String lessonId,
     required String word,
@@ -476,6 +580,22 @@ class FakeLearnerApi implements LearnerApi {
       scoreIncreased: correct,
       lastIncreasedAt: correct ? DateTime.utc(2026, 11, 10, 15, 20) : null,
       dueAt: DateTime.utc(2026, 11, 10, 15, 30),
+    );
+  }
+
+  @override
+  Future<WordReviewResult> reviewPersonalWord({
+    required String word,
+    required bool correct,
+  }) async {
+    personalReviewCallCount++;
+    return WordReviewResult(
+      word: word,
+      correct: correct,
+      score: 3,
+      scoreIncreased: false,
+      lastIncreasedAt: DateTime.utc(2026, 11, 10, 15, 20),
+      dueAt: DateTime.utc(2026, 11, 24, 15, 20),
     );
   }
 

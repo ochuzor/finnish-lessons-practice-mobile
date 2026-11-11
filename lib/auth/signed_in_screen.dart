@@ -2,6 +2,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import '../api/learner_api.dart';
+import '../course/global_vocabulary_review_screen.dart';
 import '../course/module_lessons_screen.dart';
 import 'auth_service.dart';
 
@@ -94,6 +95,16 @@ class _SignedInScreenState extends State<SignedInScreen> {
     }
   }
 
+  Future<void> _openGlobalReview() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) =>
+            GlobalVocabularyReviewScreen(learnerApi: widget.learnerApi),
+      ),
+    );
+    if (mounted) await _loadHome();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -160,7 +171,10 @@ class _SignedInScreenState extends State<SignedInScreen> {
             _InlineError(message: _homeError!, onRetry: _loadHome),
           ],
           const SizedBox(height: 20),
-          _RecommendationCard(recommendation: recommendation),
+          _RecommendationCard(
+            recommendation: recommendation,
+            onTap: recommendation.dueCount > 0 ? _openGlobalReview : null,
+          ),
           const SizedBox(height: 24),
           _ProgressSection(progress: recommendation.progress),
           const SizedBox(height: 28),
@@ -284,9 +298,10 @@ class _WelcomeHeader extends StatelessWidget {
 }
 
 class _RecommendationCard extends StatelessWidget {
-  const _RecommendationCard({required this.recommendation});
+  const _RecommendationCard({required this.recommendation, this.onTap});
 
   final HomeRecommendation recommendation;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -294,42 +309,53 @@ class _RecommendationCard extends StatelessWidget {
     final (icon, title, message) = _content();
     return Card(
       color: theme.colorScheme.primaryContainer,
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Icon(icon, size: 32, color: theme.colorScheme.onPrimaryContainer),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Recommended next',
-                    style: theme.textTheme.labelLarge?.copyWith(
-                      color: theme.colorScheme.onPrimaryContainer,
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(icon, size: 32, color: theme.colorScheme.onPrimaryContainer),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Recommended next',
+                      style: theme.textTheme.labelLarge?.copyWith(
+                        color: theme.colorScheme.onPrimaryContainer,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    title,
-                    style: theme.textTheme.titleLarge?.copyWith(
-                      color: theme.colorScheme.onPrimaryContainer,
-                      fontWeight: FontWeight.w700,
+                    const SizedBox(height: 4),
+                    Text(
+                      title,
+                      style: theme.textTheme.titleLarge?.copyWith(
+                        color: theme.colorScheme.onPrimaryContainer,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    message,
-                    style: TextStyle(
-                      color: theme.colorScheme.onPrimaryContainer,
+                    const SizedBox(height: 6),
+                    Text(
+                      message,
+                      style: TextStyle(
+                        color: theme.colorScheme.onPrimaryContainer,
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
-          ],
+              if (onTap != null) ...[
+                const SizedBox(width: 8),
+                Icon(
+                  Icons.chevron_right_rounded,
+                  color: theme.colorScheme.onPrimaryContainer,
+                ),
+              ],
+            ],
+          ),
         ),
       ),
     );
@@ -340,7 +366,7 @@ class _RecommendationCard extends StatelessWidget {
       final count = recommendation.dueCount;
       return (
         Icons.replay_circle_filled_rounded,
-        'Vocabulary review',
+        'Review vocabulary',
         '$count ${count == 1 ? 'word is' : 'words are'} ready to review.',
       );
     }

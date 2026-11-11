@@ -626,8 +626,14 @@ abstract interface class LearnerApi {
   Future<List<LessonWord>> getLessonWords(String lessonId);
   Future<List<LessonWord>> getLessonQuizBatch(String lessonId);
   Future<List<LessonExercise>> getLessonExercises(String lessonId);
+  Future<List<LessonWord>> getPracticeQuizBatch();
+  Future<List<LessonWord>> getPracticeWords();
   Future<WordReviewResult> reviewLessonWord({
     required String lessonId,
+    required String word,
+    required bool correct,
+  });
+  Future<WordReviewResult> reviewPersonalWord({
     required String word,
     required bool correct,
   });
@@ -808,6 +814,18 @@ class HttpLearnerApi implements LearnerApi {
   }
 
   @override
+  Future<List<LessonWord>> getPracticeQuizBatch() async {
+    final response = await _get('/api/practice/quiz-batch');
+    return _parseLessonWords(response, invalidListMessage: 'practice batch');
+  }
+
+  @override
+  Future<List<LessonWord>> getPracticeWords() async {
+    final response = await _get('/api/practice/words');
+    return _parseLessonWords(response, invalidListMessage: 'practice words');
+  }
+
+  @override
   Future<WordReviewResult> reviewLessonWord({
     required String lessonId,
     required String word,
@@ -819,6 +837,27 @@ class HttpLearnerApi implements LearnerApi {
       '/api/lessons/$encodedLessonId/words/$encodedWord/review',
       {'correct': correct},
     );
+    if (response is! Map<String, dynamic>) {
+      throw const LearnerApiException(
+        'The server returned an invalid review result.',
+      );
+    }
+    try {
+      return WordReviewResult.fromJson(response);
+    } on FormatException catch (error) {
+      throw LearnerApiException(error.message);
+    }
+  }
+
+  @override
+  Future<WordReviewResult> reviewPersonalWord({
+    required String word,
+    required bool correct,
+  }) async {
+    final encodedWord = Uri.encodeComponent(word);
+    final response = await _post('/api/personal-words/$encodedWord/review', {
+      'correct': correct,
+    });
     if (response is! Map<String, dynamic>) {
       throw const LearnerApiException(
         'The server returned an invalid review result.',

@@ -229,6 +229,51 @@ void main() {
     },
   );
 
+  test('global review loads its pool and routes personal reviews', () async {
+    final requests = <http.Request>[];
+    final api = HttpLearnerApi(
+      baseUrl: 'https://finnish.ochuzor.com',
+      idTokenProvider: () async => 'firebase-token',
+      client: MockClient((request) async {
+        requests.add(request);
+        if (request.url.path == '/api/practice/quiz-batch') {
+          return http.Response(
+            '[{"word":"kauppa","translations":["shop","store"],"score":1,"source_lesson_id":"lesson one","is_personal":false}]',
+            200,
+          );
+        }
+        if (request.url.path == '/api/practice/words') {
+          return http.Response(
+            '[{"word":"kirjasto","translations":["library"],"score":0,"source_lesson_id":null,"is_personal":true}]',
+            200,
+          );
+        }
+        return http.Response(
+          '{"word":"kirjasto","correct":false,"score":0,"score_increased":false,"last_increased_at":null,"due_at":"2026-11-11T12:10:00+00:00"}',
+          200,
+        );
+      }),
+    );
+
+    final batch = await api.getPracticeQuizBatch();
+    final words = await api.getPracticeWords();
+    final result = await api.reviewPersonalWord(
+      word: 'ääni testi',
+      correct: false,
+    );
+
+    expect(requests[0].url.path, '/api/practice/quiz-batch');
+    expect(requests[1].url.path, '/api/practice/words');
+    expect(
+      requests[2].url.path,
+      '/api/personal-words/%C3%A4%C3%A4ni%20testi/review',
+    );
+    expect(requests[2].body, '{"correct":false}');
+    expect(batch.single.sourceLessonId, 'lesson one');
+    expect(words.single.isPersonal, isTrue);
+    expect(result.correct, isFalse);
+  });
+
   test('lesson check sends exact choices and parses server scoring', () async {
     final requests = <http.Request>[];
     final api = HttpLearnerApi(
