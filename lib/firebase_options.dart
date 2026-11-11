@@ -74,7 +74,7 @@ class DefaultFirebaseOptions {
     if (value.isEmpty) {
       throw StateError(
         '$name is missing. Start Flutter with '
-        '--dart-define-from-file=firebase_config.local.json.',
+        '--dart-define-from-file using the matching local platform config.',
       );
     }
     return value;

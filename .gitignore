@@ -49,5 +49,8 @@ app.*.map.json
 .widget_preview/
 
 # Local Firebase client configuration supplied with --dart-define-from-file.
+# Keep the former combined filename ignored as well.
 /firebase_config.local.json
+/firebase_config.android.local.json
+/firebase_config.web.local.json
 /android/app/google-services.json
