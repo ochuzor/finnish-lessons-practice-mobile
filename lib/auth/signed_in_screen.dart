@@ -385,12 +385,11 @@ class _ProgressSection extends StatelessWidget {
         const SizedBox(height: 12),
         LayoutBuilder(
           builder: (context, constraints) {
-            final tileWidth = constraints.maxWidth >= 480
-                ? (constraints.maxWidth - 12) / 2
-                : constraints.maxWidth;
+            const gap = 6.0;
+            final tileWidth = (constraints.maxWidth - gap) / 2;
             return Wrap(
-              spacing: 12,
-              runSpacing: 12,
+              spacing: gap,
+              runSpacing: gap,
               children: [
                 _ProgressTile(
                   width: tileWidth,
@@ -439,6 +438,10 @@ class _ProgressTile extends StatelessWidget {
     return SizedBox(
       width: width,
       child: Card(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(8),
+          side: BorderSide(color: theme.colorScheme.outlineVariant),
+        ),
         child: Padding(
           padding: const EdgeInsets.all(16),
           child: Column(

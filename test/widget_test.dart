@@ -64,6 +64,15 @@ void main() {
     expect(find.textContaining('me@example.com'), findsOneWidget);
     expect(find.text('Vocabulary review'), findsOneWidget);
     expect(find.text('2 words are ready to review.'), findsOneWidget);
+    final modulesTile = tester.getTopLeft(find.text('Modules complete'));
+    final checksTile = tester.getTopLeft(find.text('Lesson checks passed'));
+    final practisingTile = tester.getTopLeft(find.text('Words in practice'));
+    final masteredTile = tester.getTopLeft(find.text('Words mastered'));
+    expect(checksTile.dx, greaterThan(modulesTile.dx));
+    expect((checksTile.dy - modulesTile.dy).abs(), lessThan(2));
+    expect(masteredTile.dx, greaterThan(practisingTile.dx));
+    expect((masteredTile.dy - practisingTile.dy).abs(), lessThan(2));
+    expect(practisingTile.dy, greaterThan(modulesTile.dy));
     await tester.scrollUntilVisible(
       find.text('First Conversations'),
       300,
@@ -191,10 +200,7 @@ void main() {
       250,
       scrollable: find.byType(Scrollable).last,
     );
-    await tester.drag(
-      find.byType(Scrollable).last,
-      const Offset(0, -120),
-    );
+    await tester.drag(find.byType(Scrollable).last, const Offset(0, -120));
     await tester.pumpAndSettle();
     await tester.tap(find.text('leipää'));
     await tester.pump();
