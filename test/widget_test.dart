@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:finnishlessons/api/learner_api.dart';
 import 'package:finnishlessons/app.dart';
 import 'package:finnishlessons/auth/auth_service.dart';
+import 'package:finnishlessons/course/lesson_checkpoint_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -212,13 +213,24 @@ void main() {
       250,
       scrollable: find.byType(Scrollable).last,
     );
+    final modulesBeforeCheckpointSubmit = learnerApi.modulesCallCount;
+    final recommendationBeforeCheckpointSubmit =
+        learnerApi.recommendationCallCount;
     await tester.tap(find.text('Submit lesson check'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Lesson check passed!'), findsOneWidget);
-    expect(find.text('2/2 correct · 100%\n2 required to pass'), findsOneWidget);
+    expect(find.text('Lesson unlocked!'), findsOneWidget);
+    expect(
+      find.text('You got 2 of 2 correct (100%).\nYou need 2 to pass.'),
+      findsOneWidget,
+    );
     expect(find.text('Lesson unlocked: Introducing yourself'), findsOneWidget);
     expect(learnerApi.checkpointSubmitCallCount, 1);
+    expect(learnerApi.modulesCallCount, modulesBeforeCheckpointSubmit + 1);
+    expect(
+      learnerApi.recommendationCallCount,
+      recommendationBeforeCheckpointSubmit + 1,
+    );
     await tester.tap(find.text('Continue to module'));
     await tester.pumpAndSettle();
 
@@ -285,6 +297,91 @@ void main() {
     expect(find.text('Review vocabulary'), findsOneWidget);
     expect(learnerApi.recommendationCallCount, 2);
   });
+
+  testWidgets('home recommendation opens the next lesson when none are due', (
+    tester,
+  ) async {
+    final auth = FakeAuthService(
+      initialUser: const AppUser(email: 'me@example.com'),
+    );
+    addTearDown(auth.dispose);
+    final learnerApi = FakeLearnerApi(homeDueCount: 0);
+
+    await tester.pumpWidget(
+      FinnishLessonsApp(auth: auth, learnerApi: learnerApi),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Greetings'), findsOneWidget);
+    expect(
+      find.text('Continue with your next available lesson.'),
+      findsOneWidget,
+    );
+    await tester.tap(find.text('Greetings'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Learn the pattern'), findsOneWidget);
+    expect(find.text('Useful phrases'), findsOneWidget);
+    expect(learnerApi.lessonWordsCallCount, 1);
+
+    await tester.tap(find.byTooltip('Back'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Greetings'), findsOneWidget);
+    expect(learnerApi.recommendationCallCount, 2);
+  });
+
+  testWidgets('lesson check requires every answer and shows failed review', (
+    tester,
+  ) async {
+    final learnerApi = FakeLearnerApi(checkpointShouldPass: false);
+    final lesson = (await learnerApi.getLessons()).first;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: LessonCheckpointScreen(lesson: lesson, learnerApi: learnerApi),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    ButtonStyleButton submitButton() => tester.widget<ButtonStyleButton>(
+      find.ancestor(
+        of: find.text('Submit lesson check'),
+        matching: find.bySubtype<ButtonStyleButton>(),
+      ),
+    );
+
+    await tester.scrollUntilVisible(
+      find.text('Submit lesson check'),
+      250,
+      scrollable: find.byType(Scrollable),
+    );
+    expect(submitButton().onPressed, isNull);
+    await tester.ensureVisible(find.text('shop / store'));
+    await tester.tap(find.text('shop / store'));
+    await tester.pump();
+    await tester.ensureVisible(find.text('Submit lesson check'));
+    expect(submitButton().onPressed, isNull);
+
+    await tester.ensureVisible(find.text('pussi'));
+    await tester.tap(find.text('pussi'));
+    await tester.pump();
+    await tester.ensureVisible(find.text('Submit lesson check'));
+    expect(submitButton().onPressed, isNotNull);
+
+    await tester.ensureVisible(find.text('Submit lesson check'));
+    await tester.tap(find.text('Submit lesson check'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Keep practising'), findsOneWidget);
+    expect(
+      find.text('You got 1 of 2 correct (50%).\nYou need 2 to pass.'),
+      findsOneWidget,
+    );
+    expect(find.text('Your answer: pussi'), findsOneWidget);
+    expect(find.text('Correct answer: leipää'), findsOneWidget);
+    expect(find.text('Practise this lesson'), findsOneWidget);
+  });
 }
 
 class FakeAuthService implements AuthService {
@@ -335,6 +432,10 @@ class FakeAuthService implements AuthService {
 }
 
 class FakeLearnerApi implements LearnerApi {
+  FakeLearnerApi({this.checkpointShouldPass = true, this.homeDueCount = 2});
+
+  final bool checkpointShouldPass;
+  final int homeDueCount;
   int profileCallCount = 0;
   int modulesCallCount = 0;
   int recommendationCallCount = 0;
@@ -381,7 +482,7 @@ class FakeLearnerApi implements LearnerApi {
   Future<HomeRecommendation> getHomeRecommendation() async {
     recommendationCallCount++;
     return HomeRecommendation(
-      dueCount: 2,
+      dueCount: homeDueCount,
       nextLesson: HomeLesson(
         id: checkpointPassed ? 'lesson-2' : 'lesson-1',
         moduleId: '01_first_conversations',
@@ -629,14 +730,24 @@ class FakeLearnerApi implements LearnerApi {
     required Map<String, String> answers,
   }) async {
     checkpointSubmitCallCount++;
-    checkpointPassed = true;
-    return const CheckpointResult(
-      passed: true,
-      correct: 2,
+    checkpointPassed = checkpointShouldPass;
+    return CheckpointResult(
+      passed: checkpointShouldPass,
+      correct: checkpointShouldPass ? 2 : 1,
       total: 2,
       requiredCorrect: 2,
-      missed: [],
-      unlockedMessage: 'Lesson unlocked: Introducing yourself',
+      missed: checkpointShouldPass
+          ? const []
+          : const [
+              MissedCheckpointAnswer(
+                prompt: 'Tarvitsen ___.',
+                selected: 'pussi',
+                correct: 'leipää',
+              ),
+            ],
+      unlockedMessage: checkpointShouldPass
+          ? 'Lesson unlocked: Introducing yourself'
+          : null,
     );
   }
 }

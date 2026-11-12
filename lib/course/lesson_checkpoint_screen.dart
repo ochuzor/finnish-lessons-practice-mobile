@@ -20,6 +20,8 @@ class _LessonCheckpointScreenState extends State<LessonCheckpointScreen> {
   bool _isLoading = true;
   bool _isSubmitting = false;
   bool _submissionFailed = false;
+  bool _canRetryStart = true;
+  bool _lessonNowPassed = false;
   String? _error;
   String? _refreshWarning;
   CheckpointSession? _session;
@@ -40,12 +42,21 @@ class _LessonCheckpointScreenState extends State<LessonCheckpointScreen> {
       _result = null;
       _answers.clear();
       _submissionFailed = false;
+      _canRetryStart = true;
+      _lessonNowPassed = false;
+      _refreshWarning = null;
     });
     try {
       final session = await widget.learnerApi.startCheckpoint(widget.lesson.id);
       if (mounted) setState(() => _session = session);
     } on LearnerApiException catch (error) {
-      if (mounted) setState(() => _error = error.detail);
+      if (!mounted) return;
+      setState(() {
+        _canRetryStart = error.statusCode != 400 && error.statusCode != 403;
+        _error = error.statusCode == 400
+            ? 'This lesson does not have any Lesson Check questions yet.'
+            : error.detail;
+      });
     } catch (_) {
       if (mounted) {
         setState(() => _error = 'Could not prepare the Lesson Check.');
@@ -77,6 +88,7 @@ class _LessonCheckpointScreenState extends State<LessonCheckpointScreen> {
       try {
         await Future.wait([
           widget.learnerApi.getLessons(),
+          widget.learnerApi.getModules(),
           widget.learnerApi.getHomeRecommendation(),
         ]);
       } catch (_) {
@@ -91,29 +103,43 @@ class _LessonCheckpointScreenState extends State<LessonCheckpointScreen> {
         });
       }
     } on LearnerApiException catch (error) {
-      if (mounted) {
-        setState(() {
-          _error = error.detail;
-          _isSubmitting = false;
-          _submissionFailed = true;
-        });
-      }
+      await _handleSubmitFailure(error.detail);
     } catch (_) {
-      if (mounted) {
-        setState(() {
-          _error = 'Could not confirm your Lesson Check result.';
-          _isSubmitting = false;
-          _submissionFailed = true;
-        });
-      }
+      await _handleSubmitFailure('Could not confirm your Lesson Check result.');
     }
+  }
+
+  Future<void> _handleSubmitFailure(String message) async {
+    var lessonNowPassed = false;
+    try {
+      final lessons = await widget.learnerApi.getLessons();
+      lessonNowPassed = lessons.any(
+        (lesson) => lesson.id == widget.lesson.id && lesson.checkpointPassed,
+      );
+      await Future.wait([
+        widget.learnerApi.getModules(),
+        widget.learnerApi.getHomeRecommendation(),
+      ]);
+    } catch (_) {
+      // The original submit error remains the most useful message.
+    }
+    if (!mounted) return;
+    setState(() {
+      _error = message;
+      _isSubmitting = false;
+      _submissionFailed = true;
+      _lessonNowPassed = lessonNowPassed;
+    });
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Lesson Check')),
-      body: SafeArea(child: _buildBody(context)),
+    return PopScope(
+      canPop: !_isSubmitting,
+      child: Scaffold(
+        appBar: AppBar(title: const Text('Lesson Check')),
+        body: SafeArea(child: _buildBody(context)),
+      ),
     );
   }
 
@@ -138,18 +164,29 @@ class _LessonCheckpointScreenState extends State<LessonCheckpointScreen> {
         icon: Icons.fact_check_outlined,
         title: 'Lesson Check unavailable',
         message: _error ?? 'Could not prepare the Lesson Check.',
-        actionLabel: 'Try again',
-        onAction: _start,
+        actionLabel: _canRetryStart ? 'Try again' : 'Return to lesson',
+        onAction: _canRetryStart
+            ? _start
+            : () => Navigator.of(context).pop(false),
       );
     }
     if (_submissionFailed) {
+      if (_lessonNowPassed) {
+        return _CheckpointMessage(
+          icon: Icons.celebration_outlined,
+          title: 'Lesson unlocked!',
+          message: 'The submission response was interrupted, but refreshed course progress confirms that this Lesson Check was passed.',
+          actionLabel: 'Continue to module',
+          onAction: () => Navigator.of(context).pop(true),
+        );
+      }
       return _CheckpointMessage(
         icon: Icons.cloud_off_outlined,
         title: 'Result could not be confirmed',
         message:
             '${_error ?? 'The submission could not be confirmed.'}\n\nThe server may have processed it, so this attempt will not be submitted again.',
-        actionLabel: 'Return to lesson',
-        onAction: () => Navigator.of(context).pop(false),
+        actionLabel: 'Start a new attempt',
+        onAction: _start,
       );
     }
     return _buildQuestions(_session!);
@@ -315,7 +352,7 @@ class _ResultView extends StatelessWidget {
         ),
         const SizedBox(height: 12),
         Text(
-          result.passed ? 'Lesson check passed!' : 'Keep practising',
+          result.passed ? 'Lesson unlocked!' : 'Keep practising',
           textAlign: TextAlign.center,
           style: theme.textTheme.headlineSmall?.copyWith(
             fontWeight: FontWeight.w700,
@@ -323,8 +360,8 @@ class _ResultView extends StatelessWidget {
         ),
         const SizedBox(height: 8),
         Text(
-          '${result.correct}/${result.total} correct · $percent%\n'
-          '${result.requiredCorrect} required to pass',
+          'You got ${result.correct} of ${result.total} correct ($percent%).\n'
+          'You need ${result.requiredCorrect} to pass.',
           textAlign: TextAlign.center,
         ),
         if (result.unlockedMessage != null &&

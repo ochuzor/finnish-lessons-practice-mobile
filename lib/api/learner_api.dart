@@ -463,7 +463,7 @@ class CheckpointQuestion {
     if (id is! String ||
         prompt is! String ||
         options is! List<dynamic> ||
-        options.length < 2 ||
+        options.isEmpty ||
         options.any((option) => option is! String) ||
         translation is! String) {
       throw const FormatException(

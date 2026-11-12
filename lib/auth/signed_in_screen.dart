@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import '../api/learner_api.dart';
 import '../course/global_vocabulary_review_screen.dart';
+import '../course/lesson_screen.dart';
 import '../course/module_lessons_screen.dart';
 import 'auth_service.dart';
 
@@ -105,6 +106,45 @@ class _SignedInScreenState extends State<SignedInScreen> {
     if (mounted) await _loadHome();
   }
 
+  Future<void> _openRecommendedLesson(HomeLesson recommendation) async {
+    CourseLesson? lesson = _lessonById(recommendation.id);
+    if (lesson == null || lesson.locked) {
+      await _loadHome();
+      if (!mounted) return;
+      lesson = _lessonById(recommendation.id);
+    }
+
+    if (lesson == null) {
+      setState(() {
+        _homeError = 'The recommended lesson is no longer available.';
+      });
+      return;
+    }
+    if (lesson.locked) {
+      setState(() {
+        _homeError = 'The recommended lesson is not unlocked yet.';
+      });
+      return;
+    }
+
+    await Navigator.of(context).push<bool>(
+      MaterialPageRoute<bool>(
+        builder: (_) => UnlockedLessonScreen(
+          lesson: lesson!,
+          learnerApi: widget.learnerApi,
+        ),
+      ),
+    );
+    if (mounted) await _loadHome();
+  }
+
+  CourseLesson? _lessonById(String id) {
+    for (final lesson in _lessons) {
+      if (lesson.id == id) return lesson;
+    }
+    return null;
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -158,6 +198,7 @@ class _SignedInScreenState extends State<SignedInScreen> {
     if (recommendation == null || backendUser == null) {
       return const SizedBox.shrink();
     }
+    final recommendedLesson = recommendation.nextLesson;
 
     return RefreshIndicator(
       onRefresh: _loadHome,
@@ -173,7 +214,11 @@ class _SignedInScreenState extends State<SignedInScreen> {
           const SizedBox(height: 20),
           _RecommendationCard(
             recommendation: recommendation,
-            onTap: recommendation.dueCount > 0 ? _openGlobalReview : null,
+            onTap: recommendation.dueCount > 0
+                ? _openGlobalReview
+                : recommendedLesson != null
+                ? () => _openRecommendedLesson(recommendedLesson)
+                : null,
           ),
           const SizedBox(height: 24),
           _ProgressSection(progress: recommendation.progress),
