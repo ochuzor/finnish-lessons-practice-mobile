@@ -628,6 +628,17 @@ abstract interface class LearnerApi {
   Future<List<LessonExercise>> getLessonExercises(String lessonId);
   Future<List<LessonWord>> getPracticeQuizBatch();
   Future<List<LessonWord>> getPracticeWords();
+  Future<List<LessonWord>> getPersonalWords();
+  Future<LessonWord> createPersonalWord({
+    required String word,
+    required List<String> translations,
+  });
+  Future<LessonWord> updatePersonalWord({
+    required String existingWord,
+    required String word,
+    required List<String> translations,
+  });
+  Future<void> deletePersonalWord(String word);
   Future<WordReviewResult> reviewLessonWord({
     required String lessonId,
     required String word,
@@ -826,6 +837,58 @@ class HttpLearnerApi implements LearnerApi {
   }
 
   @override
+  Future<List<LessonWord>> getPersonalWords() async {
+    final response = await _get('/api/personal-words');
+    final words = _parseLessonWords(
+      response,
+      invalidListMessage: 'personal vocabulary list',
+    );
+    if (words.any((word) => !word.isPersonal || word.sourceLessonId != null)) {
+      throw const LearnerApiException(
+        'The server returned an invalid personal vocabulary list.',
+      );
+    }
+    return words;
+  }
+
+  @override
+  Future<LessonWord> createPersonalWord({
+    required String word,
+    required List<String> translations,
+  }) async {
+    final response = await _post('/api/personal-words', {
+      'word': word,
+      'translations': translations,
+    });
+    return _parsePersonalWord(response);
+  }
+
+  @override
+  Future<LessonWord> updatePersonalWord({
+    required String existingWord,
+    required String word,
+    required List<String> translations,
+  }) async {
+    final encodedWord = Uri.encodeComponent(existingWord);
+    final response = await _put('/api/personal-words/$encodedWord', {
+      'word': word,
+      'translations': translations,
+    });
+    return _parsePersonalWord(response);
+  }
+
+  @override
+  Future<void> deletePersonalWord(String word) async {
+    final encodedWord = Uri.encodeComponent(word);
+    final response = await _delete('/api/personal-words/$encodedWord');
+    if (response is! Map<String, dynamic> || response['deleted'] != true) {
+      throw const LearnerApiException(
+        'The server returned an invalid deletion result.',
+      );
+    }
+  }
+
+  @override
   Future<WordReviewResult> reviewLessonWord({
     required String lessonId,
     required String word,
@@ -937,6 +1000,25 @@ class HttpLearnerApi implements LearnerApi {
     }
   }
 
+  LessonWord _parsePersonalWord(Object? response) {
+    if (response is! Map<String, dynamic>) {
+      throw const LearnerApiException(
+        'The server returned an invalid personal word.',
+      );
+    }
+    try {
+      final word = LessonWord.fromJson(response);
+      if (!word.isPersonal || word.sourceLessonId != null) {
+        throw const FormatException(
+          'The server returned an invalid personal word.',
+        );
+      }
+      return word;
+    } on FormatException catch (error) {
+      throw LearnerApiException(error.message);
+    }
+  }
+
   Future<Object?> _get(String path) async {
     if (_baseUrl.isEmpty) {
       throw const LearnerApiException(
@@ -1012,6 +1094,83 @@ class HttpLearnerApi implements LearnerApi {
       );
     }
 
+    final body = _decodeJson(response.body);
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      final detail = body is Map<String, dynamic> ? body['detail'] : null;
+      throw LearnerApiException(
+        detail is String && detail.isNotEmpty
+            ? detail
+            : 'The server could not complete the request.',
+        statusCode: response.statusCode,
+      );
+    }
+    return body;
+  }
+
+  Future<Object?> _put(String path, Map<String, dynamic> payload) async {
+    if (_baseUrl.isEmpty) {
+      throw const LearnerApiException(
+        'API_BASE_URL is missing. Start the app with the production API URL.',
+      );
+    }
+    final token = await idTokenProvider();
+    if (token == null || token.isEmpty) {
+      throw const LearnerApiException(
+        'Your sign-in session is unavailable. Sign out and sign in again.',
+      );
+    }
+
+    late http.Response response;
+    try {
+      response = await _client.put(
+        Uri.parse('$_baseUrl$path'),
+        headers: {
+          'Accept': 'application/json',
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode(payload),
+      );
+    } on Exception {
+      throw const LearnerApiException(
+        'Could not reach the Finnish Lessons server. Check your connection and try again.',
+      );
+    }
+    return _decodeSuccessfulResponse(response);
+  }
+
+  Future<Object?> _delete(String path) async {
+    if (_baseUrl.isEmpty) {
+      throw const LearnerApiException(
+        'API_BASE_URL is missing. Start the app with the production API URL.',
+      );
+    }
+    final token = await idTokenProvider();
+    if (token == null || token.isEmpty) {
+      throw const LearnerApiException(
+        'Your sign-in session is unavailable. Sign out and sign in again.',
+      );
+    }
+
+    late http.Response response;
+    try {
+      response = await _client.delete(
+        Uri.parse('$_baseUrl$path'),
+        headers: {
+          'Accept': 'application/json',
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+      );
+    } on Exception {
+      throw const LearnerApiException(
+        'Could not reach the Finnish Lessons server. Check your connection and try again.',
+      );
+    }
+    return _decodeSuccessfulResponse(response);
+  }
+
+  Object? _decodeSuccessfulResponse(http.Response response) {
     final body = _decodeJson(response.body);
     if (response.statusCode < 200 || response.statusCode >= 300) {
       final detail = body is Map<String, dynamic> ? body['detail'] : null;

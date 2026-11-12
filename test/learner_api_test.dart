@@ -274,6 +274,57 @@ void main() {
     expect(result.correct, isFalse);
   });
 
+  test('personal vocabulary CRUD uses exact payloads and encoded paths', () async {
+    final requests = <http.Request>[];
+    final api = HttpLearnerApi(
+      baseUrl: 'https://finnish.ochuzor.com',
+      idTokenProvider: () async => 'firebase-token',
+      client: MockClient((request) async {
+        requests.add(request);
+        if (request.method == 'GET') {
+          return http.Response(
+            '[{"word":"kirjasto","translations":["library"],"score":1,"source_lesson_id":null,"is_personal":true}]',
+            200,
+          );
+        }
+        if (request.method == 'DELETE') {
+          return http.Response('{"deleted":true}', 200);
+        }
+        final body = request.method == 'POST'
+            ? '{"word":"sauna","translations":["sauna"],"score":0,"source_lesson_id":null,"is_personal":true}'
+            : '{"word":"ääni","translations":["sound","voice"],"score":0,"source_lesson_id":null,"is_personal":true}';
+        return http.Response(body, 200);
+      }),
+    );
+
+    final words = await api.getPersonalWords();
+    final created = await api.createPersonalWord(
+      word: 'sauna',
+      translations: const ['sauna'],
+    );
+    final updated = await api.updatePersonalWord(
+      existingWord: 'ääni testi',
+      word: 'ääni',
+      translations: const ['sound', 'voice'],
+    );
+    await api.deletePersonalWord('ääni testi');
+
+    expect(requests[0].url.path, '/api/personal-words');
+    expect(requests[1].method, 'POST');
+    expect(requests[1].body, '{"word":"sauna","translations":["sauna"]}');
+    expect(requests[2].method, 'PUT');
+    expect(requests[2].url.path, '/api/personal-words/%C3%A4%C3%A4ni%20testi');
+    expect(
+      requests[2].body,
+      '{"word":"ääni","translations":["sound","voice"]}',
+    );
+    expect(requests[3].method, 'DELETE');
+    expect(requests[3].url.path, '/api/personal-words/%C3%A4%C3%A4ni%20testi');
+    expect(words.single.score, 1);
+    expect(created.word, 'sauna');
+    expect(updated.translations, ['sound', 'voice']);
+  });
+
   test('lesson check sends exact choices and parses server scoring', () async {
     final requests = <http.Request>[];
     final api = HttpLearnerApi(

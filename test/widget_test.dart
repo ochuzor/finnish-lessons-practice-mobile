@@ -93,6 +93,8 @@ void main() {
     expect(find.text('Locked · view locked lessons'), findsOneWidget);
     expect(find.byIcon(Icons.lock_outline_rounded), findsOneWidget);
 
+    await tester.ensureVisible(find.text('Everyday Essentials'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Everyday Essentials'));
     await tester.pumpAndSettle();
 
@@ -331,6 +333,80 @@ void main() {
     expect(learnerApi.recommendationCallCount, 2);
   });
 
+  testWidgets('personal vocabulary supports add, edit, and confirmed delete', (
+    tester,
+  ) async {
+    final auth = FakeAuthService(
+      initialUser: const AppUser(email: 'me@example.com'),
+    );
+    addTearDown(auth.dispose);
+    final learnerApi = FakeLearnerApi();
+
+    await tester.pumpWidget(
+      FinnishLessonsApp(auth: auth, learnerApi: learnerApi),
+    );
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+      find.text('My vocabulary'),
+      300,
+      scrollable: find.byType(Scrollable).last,
+    );
+    await tester.tap(find.text('My vocabulary'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('kirjasto'), findsOneWidget);
+    expect(find.text('library'), findsOneWidget);
+    expect(learnerApi.personalWordsCallCount, 1);
+
+    await tester.tap(find.text('Add word'));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.widgetWithText(TextFormField, 'Finnish word or phrase'),
+      'sauna',
+    );
+    await tester.enterText(
+      find.widgetWithText(TextFormField, 'English meanings'),
+      'sauna, steam bath, sauna',
+    );
+    await tester.tap(find.text('Save word'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('sauna'), findsOneWidget);
+    expect(find.text('sauna, steam bath'), findsOneWidget);
+    expect(learnerApi.createPersonalWordCallCount, 1);
+    expect(learnerApi.lastPersonalTranslations, ['sauna', 'steam bath']);
+
+    await tester.tap(find.byTooltip('Edit sauna'));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.widgetWithText(TextFormField, 'Finnish word or phrase'),
+      'saunat',
+    );
+    await tester.enterText(
+      find.widgetWithText(TextFormField, 'English meanings'),
+      'saunas',
+    );
+    await tester.tap(find.text('Save changes'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('saunat'), findsOneWidget);
+    expect(find.text('saunas'), findsOneWidget);
+    expect(learnerApi.updatePersonalWordCallCount, 1);
+
+    await tester.tap(find.byTooltip('Remove saunat'));
+    await tester.pumpAndSettle();
+    expect(
+      find.text('Remove ‘saunat’ and its practice history?'),
+      findsOneWidget,
+    );
+    await tester.tap(find.text('Remove'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('saunat'), findsNothing);
+    expect(learnerApi.deletePersonalWordCallCount, 1);
+    expect(learnerApi.personalWordsCallCount, 4);
+  });
+
   testWidgets('lesson check requires every answer and shows failed review', (
     tester,
   ) async {
@@ -445,11 +521,25 @@ class FakeLearnerApi implements LearnerApi {
   int lessonExercisesCallCount = 0;
   int practiceBatchCallCount = 0;
   int practiceWordsCallCount = 0;
+  int personalWordsCallCount = 0;
+  int createPersonalWordCallCount = 0;
+  int updatePersonalWordCallCount = 0;
+  int deletePersonalWordCallCount = 0;
   int reviewCallCount = 0;
   int personalReviewCallCount = 0;
   int checkpointStartCallCount = 0;
   int checkpointSubmitCallCount = 0;
   bool checkpointPassed = false;
+  List<String>? lastPersonalTranslations;
+  final List<LessonWord> personalWords = [
+    const LessonWord(
+      word: 'kirjasto',
+      translations: ['library'],
+      score: 1,
+      sourceLessonId: null,
+      isPersonal: true,
+    ),
+  ];
 
   @override
   Future<BackendUser> getCurrentUser() async {
@@ -665,6 +755,57 @@ class FakeLearnerApi implements LearnerApi {
         isPersonal: false,
       ),
     ];
+  }
+
+  @override
+  Future<List<LessonWord>> getPersonalWords() async {
+    personalWordsCallCount++;
+    return List<LessonWord>.of(personalWords);
+  }
+
+  @override
+  Future<LessonWord> createPersonalWord({
+    required String word,
+    required List<String> translations,
+  }) async {
+    createPersonalWordCallCount++;
+    lastPersonalTranslations = List<String>.of(translations);
+    final created = LessonWord(
+      word: word,
+      translations: translations,
+      score: 0,
+      sourceLessonId: null,
+      isPersonal: true,
+    );
+    personalWords.add(created);
+    return created;
+  }
+
+  @override
+  Future<LessonWord> updatePersonalWord({
+    required String existingWord,
+    required String word,
+    required List<String> translations,
+  }) async {
+    updatePersonalWordCallCount++;
+    final index = personalWords.indexWhere(
+      (candidate) => candidate.word == existingWord,
+    );
+    final updated = LessonWord(
+      word: word,
+      translations: translations,
+      score: existingWord == word ? personalWords[index].score : 0,
+      sourceLessonId: null,
+      isPersonal: true,
+    );
+    personalWords[index] = updated;
+    return updated;
+  }
+
+  @override
+  Future<void> deletePersonalWord(String word) async {
+    deletePersonalWordCallCount++;
+    personalWords.removeWhere((candidate) => candidate.word == word);
   }
 
   @override

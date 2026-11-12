@@ -5,6 +5,7 @@ import '../api/learner_api.dart';
 import '../course/global_vocabulary_review_screen.dart';
 import '../course/lesson_screen.dart';
 import '../course/module_lessons_screen.dart';
+import '../vocabulary/personal_vocabulary_screen.dart';
 import 'auth_service.dart';
 
 class SignedInScreen extends StatefulWidget {
@@ -101,6 +102,15 @@ class _SignedInScreenState extends State<SignedInScreen> {
       MaterialPageRoute<void>(
         builder: (_) =>
             GlobalVocabularyReviewScreen(learnerApi: widget.learnerApi),
+      ),
+    );
+    if (mounted) await _loadHome();
+  }
+
+  Future<void> _openPersonalVocabulary() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => PersonalVocabularyScreen(learnerApi: widget.learnerApi),
       ),
     );
     if (mounted) await _loadHome();
@@ -222,6 +232,8 @@ class _SignedInScreenState extends State<SignedInScreen> {
           ),
           const SizedBox(height: 24),
           _ProgressSection(progress: recommendation.progress),
+          const SizedBox(height: 28),
+          _PersonalVocabularyCard(onTap: _openPersonalVocabulary),
           const SizedBox(height: 28),
           _ModulesSection(
             modules: _modules,
@@ -531,6 +543,62 @@ class _ProgressTile extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _PersonalVocabularyCard extends StatelessWidget {
+  const _PersonalVocabularyCard({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Keep learning',
+          style: theme.textTheme.titleLarge?.copyWith(
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        const SizedBox(height: 12),
+        Card(
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            onTap: onTap,
+            child: Padding(
+              padding: const EdgeInsets.all(18),
+              child: Row(
+                children: [
+                  CircleAvatar(
+                    backgroundColor: theme.colorScheme.secondaryContainer,
+                    foregroundColor: theme.colorScheme.onSecondaryContainer,
+                    child: const Icon(Icons.book_outlined),
+                  ),
+                  const SizedBox(width: 14),
+                  const Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'My vocabulary',
+                          style: TextStyle(fontWeight: FontWeight.w700),
+                        ),
+                        SizedBox(height: 3),
+                        Text('Add and manage your own Finnish words.'),
+                      ],
+                    ),
+                  ),
+                  const Icon(Icons.chevron_right_rounded),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
